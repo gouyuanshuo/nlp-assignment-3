@@ -83,8 +83,8 @@
 
 - [x] Write/run an end-to-end CLI test against a clearly synthetic MMSA-format fixture: prepare → train → reload → robustness evaluation → report → demo.
 - [x] Implement CLI and safe download helper, pin dependencies, document data source/feature provenance/label rule and exact commands.
-- [ ] Download and audit the actual feature release if accessible; run real-data train/validation and demo smoke checks on available GPU. Record experimental scope honestly.
-- [ ] Verify: full pytest suite, ruff, package install, CLI smoke, CUDA availability and actual-data checks when available.
+- [x] Download and audit the actual feature release if accessible; run real-data train/validation and demo smoke checks on available GPU. Record experimental scope honestly.
+- [x] Verify: full pytest suite, ruff, package install, CLI smoke, CUDA availability and actual-data checks when available.
 - [x] Request one independent final code review under the executing-plans skill, fix consequential findings with regression tests, and record final verification.
 
 ## Execution decisions

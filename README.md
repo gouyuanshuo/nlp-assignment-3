@@ -4,6 +4,8 @@ A PyTorch implementation of the approved CMU-MOSEI proposal. It compares text-on
 
 **Task:** negative sentiment (`y < 0`) versus positive sentiment (`y > 0`). Exactly neutral clips (`y == 0`) are excluded from train, validation and test. This model has no neutral class.
 
+**This checkout is ready to use:** the Kaggle archive has been downloaded and verified, and `data/prepared/` already exists. All three models completed one-epoch GPU checks on the real training/validation splits. See [verification evidence](docs/verification.md) and `runs/real-data-smoke-20261002/`; the full three-seed research study is still to run. Skip the download/preparation commands when using this existing cache.
+
 ## Get started
 
 The local checkout is `/home/gys/Projects/nlp-assignment-3`. Its environment, data, checkpoints and outputs stay in this project.
@@ -108,7 +110,7 @@ python -m mosei demo --data data/prepared \
   --run runs/transformer-seed1111 --baseline runs/text-seed1111 --index 0
 ```
 
-Use `--clip-id 'VIDEO_ID$_$CLIP_ID'` to inspect an error-example ID. Output shows the transcript, annotation, sentiment probabilities and the text-only comparison. Probabilities are model outputs; the demo does not infer a person's true internal emotion. Cases of apparent sarcasm or disagreement remain qualitative observations because this dataset does not provide independent sentiment truth for each modality.
+Use `--clip-id='VIDEO_ID$_$CLIP_ID'` (the equals sign also supports IDs starting with a dash) to inspect an error-example ID. Output shows the transcript, annotation, sentiment probabilities and the text-only comparison. Probabilities are model outputs; the demo does not infer a person's true internal emotion. Cases of apparent sarcasm or disagreement remain qualitative observations because this dataset does not provide independent sentiment truth for each modality.
 
 ## Project files
 

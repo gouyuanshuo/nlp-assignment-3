@@ -2,7 +2,7 @@
 
 Approved specification: /home/gys/Course/2026-Spring-42173-Advanced-Natural-Language-Processing/04_Assignments/Assignment_03_Cross_Modal_Conflict/Plan/Assignment3_Transformer_Fusion_CMU_MOSEI_Project_Plan.docx.
 
-Status: Tasks 1–4 complete. Task 5 software and review complete; real-release download/audit and GPU data smoke check pending.
+Status: Tasks 1–5 complete. Independent review, real-release checksum/schema audit, all three GPU training/validation smoke runs, CLI demo, and final tests passed.
 
 Pre-flight: Task 1's valid masks and train-fitted normalization feed every model; Task 2's two-logit interface feeds training/prediction; Task 3's checkpoint metadata supplies evaluation and demo; Task 4's ID-keyed predictions supply paired reports. No interface conflicts found.
 
@@ -41,3 +41,7 @@ CUDA verification: default 1,347,330-parameter Transformer completed 10 syntheti
 Actual-data verification queued in /tmp/verify_mosei_real_data.py: waits for checksum-verified Kaggle archive, prepares official train/valid/test, then runs each core model for one epoch on the full eligible training split and evaluates all 13 conditions on validation only. Full test-set/three-seed scientific experiments are intentionally not claimed by an execution smoke check; their runner is delivered. Logs: /tmp/mosei-real-data-verification.log.
 
 Delivery decision: this is a new standalone local repository, with no base branch or remote to merge into. Preserve the implementation branch in place; no merge/push approval is needed to deliver the requested local project.
+
+Task 5: complete — pinned Kaggle file verified; eligible splits 12,786/1,438/3,634 after neutral exclusions; full data audit passed; all three classifiers trained one epoch on CUDA and evaluated 13 validation conditions each. The validation demo and reports were generated and inspected. Final suite: 46 passed; ruff checks/format clean. Final scientific three-seed test/ablation runs remain an executable next step, not a claimed result.
+
+Final review minor on stale task status reconciled during completion bookkeeping. No deferred code findings. Exported figure titles/contrast corrected and inspected on synthetic and real-data report output.
