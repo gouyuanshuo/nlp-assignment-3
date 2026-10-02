@@ -1,8 +1,9 @@
 # CMU-MOSEI video upload prototype
 
-Status: proposed design for user review. This document defines the next project
-stage; the video upload implementation and larger dataset download are not yet
-complete. The existing code implements the earlier cached-feature experiment.
+Status: approved by the user's "good" on 2026-10-03. This document defines the
+next project stage; the video upload implementation and larger dataset download
+are not yet complete. The existing code implements the earlier cached-feature
+experiment.
 
 ## Intended outcome
 
