@@ -1,0 +1,6 @@
+name = "no_positions"
+[model]
+name = "transformer"
+positions = false
+[training]
+seed = 1111

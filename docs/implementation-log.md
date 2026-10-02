@@ -25,3 +25,9 @@ Task 3: in progress.
 Task 3: complete — 32/32 suite passed. Real tiny training/reload cycles cover all three models, deterministic same-seed predictions, validation F1/loss selection, no test-split access and overwrite protection.
 
 Task 4: implementation and tests added; final task verification in progress.
+
+Task 4: complete — 38/38 suite passed. Per-ID deterministic Gaussian noise, intact padding, missing-modality behavior, hand-calculated F1/confusion and paired video-cluster bootstrap verified. IDs/labels must match before pairing; standard deviation is omitted for one seed.
+
+Task 5: in progress. End-to-end command-line test written before CLI.
+
+Task 5: software implemented — CLI prepare/train/evaluate/report/demo works end-to-end on synthetic fixtures; matrix runner freezes settings and supports train-only; downloader verifies byte ranges and checksums; uv.lock pins dependencies. Actual Kaggle archive download remains in progress.

@@ -10,6 +10,34 @@ from .evaluate import read_predictions
 from .io import fingerprint, read_json, write_json
 
 
+def error_examples(left: list[dict], right: list[dict], limit: int = 10) -> dict:
+    right_by_id = {r["id"]: r for r in right}
+    if {r["id"] for r in left} != set(right_by_id):
+        raise ValueError("Error examples require matching clip IDs")
+    corrected, regressed = [], []
+    for a in left:
+        b = right_by_id[a["id"]]
+        if a["label"] != b["label"]:
+            raise ValueError("Error examples require matching labels")
+        row = {
+            "id": a["id"],
+            "video_id": a["video_id"],
+            "label": a["label"],
+            "left_prediction": a["prediction"],
+            "right_prediction": b["prediction"],
+        }
+        if a["prediction"] == a["label"] and b["prediction"] != b["label"]:
+            corrected.append(row)
+        if b["prediction"] == b["label"] and a["prediction"] != a["label"]:
+            regressed.append(row)
+    return {
+        "left_correct_right_wrong_count": len(corrected),
+        "right_correct_left_wrong_count": len(regressed),
+        "left_correct_right_wrong": corrected[:limit],
+        "right_correct_left_wrong": regressed[:limit],
+    }
+
+
 def _f1_from_counts(counts):
     # Counts are [true0/pred0, true0/pred1, true1/pred0, true1/pred1].
     tp = counts[..., [0, 3]]
@@ -144,7 +172,7 @@ def summarize_runs(
             "evaluation": evaluation,
             "config_fingerprint": fingerprint(config),
         }
-    rows, pairs = [], []
+    rows, pairs, examples = [], [], []
     for name, runs in sorted(groups.items()):
         first = next(iter(runs.values()))
         for condition in first["evaluation"]["metrics"]:
@@ -178,6 +206,18 @@ def summarize_runs(
                 ]
 
             result = paired_bootstrap(predictions(left), predictions(right), bootstrap_samples)
+            if condition == "clean":
+                for seed in seeds:
+                    a = read_predictions(left[seed]["path"] / "evaluation" / split / "clean.csv")
+                    b = read_predictions(right[seed]["path"] / "evaluation" / split / "clean.csv")
+                    examples.append(
+                        {
+                            "left": left_name,
+                            "right": right_name,
+                            "seed": seed,
+                            **error_examples(a, b),
+                        }
+                    )
             pairs.append(
                 {
                     "left": left_name,
@@ -202,6 +242,7 @@ def summarize_runs(
         ],
     }
     write_json(output / "results.json", result)
+    write_json(output / "error_examples.json", examples)
     with (output / "summary.csv").open("w", newline="", encoding="utf-8") as stream:
         writer = csv.DictWriter(stream, fieldnames=list(rows[0]))
         writer.writeheader()

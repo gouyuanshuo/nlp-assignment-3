@@ -1,0 +1,6 @@
+name = "no_modality"
+[model]
+name = "transformer"
+modality_embeddings = false
+[training]
+seed = 1111

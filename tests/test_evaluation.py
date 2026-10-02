@@ -3,7 +3,7 @@ import torch
 
 from mosei.evaluate import Condition, corrupt_batch
 from mosei.metrics import classification_metrics
-from mosei.report import paired_bootstrap
+from mosei.report import error_examples, paired_bootstrap
 
 
 def test_noise_is_per_clip_batch_invariant_and_padding_unchanged():
@@ -71,3 +71,10 @@ def test_paired_report_refuses_misaligned_or_relabelled_examples():
 def test_invalid_corruption_configuration_rejected():
     with pytest.raises(ValueError):
         Condition("noise", "audio", -1)
+
+
+def test_error_examples_identify_corrections_and_regressions():
+    examples = error_examples(records([0, 0, 1, 1]), records([1, 1, 0, 0]))
+    assert examples["left_correct_right_wrong_count"] == 4
+    assert examples["right_correct_left_wrong_count"] == 0
+    assert examples["left_correct_right_wrong"][0]["id"] == "0"
