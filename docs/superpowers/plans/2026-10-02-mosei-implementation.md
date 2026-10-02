@@ -8,7 +8,7 @@
 
 **Tech stack:** Python 3.12, PyTorch, NumPy, scikit-learn, matplotlib, pytest; TOML configurations; JSON/CSV outputs.
 
-**Spec:** `../../../../Plan/Assignment3_Transformer_Fusion_CMU_MOSEI_Project_Plan.docx` (approved by the user's request to implement it).
+**Spec:** `/home/gys/Course/2026-Spring-42173-Advanced-Natural-Language-Processing/04_Assignments/Assignment_03_Cross_Modal_Conflict/Plan/Assignment3_Transformer_Fusion_CMU_MOSEI_Project_Plan.docx` (approved by the user's request to implement it).
 
 ## Global constraints
 
@@ -39,7 +39,7 @@
 
 - [ ] Write and run failing tests for neutral exclusion, train-only normalization, metadata masks, padding, non-finite values and duplicate/cross-split video IDs.
 - [ ] Implement strict aligned-release schema validation, streaming SHA-256 verification before pickle loading, source-video audit, per-feature finite moments and safe prepared cache.
-- [ ] Verify: `../.venv/bin/python -m pytest tests/test_data.py -q` → all pass.
+- [ ] Verify: `.venv/bin/python -m pytest tests/test_data.py -q` → all pass.
 - [ ] Record evidence and commit the independently usable preparation layer.
 
 ## Task 2: Three models and ablation switches
@@ -50,7 +50,7 @@
 
 - [ ] Write/run failing tests for padding invariance, stream removal, gradients and ablation execution across all models.
 - [ ] Implement masked mean, text MLP, pooled projected-concatenation MLP, and independently initialized Transformer layers with CLS, sinusoidal positions and optional modality embeddings.
-- [ ] Verify: `../.venv/bin/python -m pytest -q` → all pass, including finite loss/gradients under every missing stream.
+- [ ] Verify: `.venv/bin/python -m pytest -q` → all pass, including finite loss/gradients under every missing stream.
 - [ ] Record evidence and commit model layer.
 
 ## Task 3: Reproducible training and checkpoint restoration
@@ -61,7 +61,7 @@
 
 - [ ] Write/run failing tests for validation tie-breaks, repeatable toy training, checkpoint round-trip, train/valid-only access, and overwrite rejection.
 - [ ] Implement deterministic seeds, AdamW, clipping, early stopping, saved best checkpoint, per-epoch logs and provenance; expose CPU/CUDA/auto.
-- [ ] Verify: `../.venv/bin/python -m pytest -q` → all pass, including a tiny real train/reload cycle.
+- [ ] Verify: `.venv/bin/python -m pytest -q` → all pass, including a tiny real train/reload cycle.
 - [ ] Record evidence and commit training layer.
 
 ## Task 4: Matched robustness and paired reporting
@@ -72,7 +72,7 @@
 
 - [ ] Write/run failing tests for per-ID/batch-invariant corruption, untouched padding, literal confusion/F1 values, source-video bootstrap and pairing guards.
 - [ ] Implement clean + 12 corruption conditions, per-clip predictions, degradation from clean, CSV/JSON/PNG exports, seed mean/std and paired video-cluster intervals.
-- [ ] Verify: `../.venv/bin/python -m pytest -q` → all pass with missing modality and noise reproducible across models.
+- [ ] Verify: `.venv/bin/python -m pytest -q` → all pass with missing modality and noise reproducible across models.
 - [ ] Record evidence and commit evaluation/report layer.
 
 ## Task 5: CLI, experiment matrix, demo and documented run
@@ -90,6 +90,6 @@
 ## Execution decisions
 
 - The user approved the written proposal and explicitly requested implementation. Continue directly in this session; no duplicate design approval is required.
-- No enclosing Git repository exists. Use a new, isolated `Code` project; keep the proposal and course materials outside its scope.
-- A local environment lives at `../.venv`; all installation stays there. CLI documentation uses a standard project-local `.venv` for portability.
+- No enclosing Git repository exists. Use `/home/gys/Projects/nlp-assignment-3`; the user requires code in Projects, outside Course.
+- The isolated Python environment is `.venv` in the project root.
 - Full report prose and presentation require observed experiment results and group contributions; this software generates their evidence, not invented outcomes.
