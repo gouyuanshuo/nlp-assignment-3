@@ -37,3 +37,7 @@ Final review: independent gpt-6-astra reviewer found no critical issues and one 
 Review scope decisions: actual data/schema/performance will be checked after download; raw encoders and published comparator reproductions remain optional beyond this implementation; final report prose/slides await experimental evidence and group ownership; deliberate external cache tampering is outside this local workflow. Cache provenance and metadata compatibility are checked.
 
 CUDA verification: default 1,347,330-parameter Transformer completed 10 synthetic batch-32, length-50 optimization steps with finite loss/gradients in 0.65 seconds; peak allocated GPU memory approximately 253 MB. This is an execution check, not model-quality evidence.
+
+Actual-data verification queued in /tmp/verify_mosei_real_data.py: waits for checksum-verified Kaggle archive, prepares official train/valid/test, then runs each core model for one epoch on the full eligible training split and evaluates all 13 conditions on validation only. Full test-set/three-seed scientific experiments are intentionally not claimed by an execution smoke check; their runner is delivered. Logs: /tmp/mosei-real-data-verification.log.
+
+Delivery decision: this is a new standalone local repository, with no base branch or remote to merge into. Preserve the implementation branch in place; no merge/push approval is needed to deliver the requested local project.
