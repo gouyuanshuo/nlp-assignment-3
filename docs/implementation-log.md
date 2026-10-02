@@ -13,3 +13,11 @@ Ruling: No existing Git repository or code flow exists. Build an isolated Code d
 Environment: Linux, Python 3.12 isolated environment, RTX 4060 8 GB, ample local storage. No dataset was found in the course or Downloads directories. Official MMSA source and published feature checksum verified.
 
 User correction: All code and its environment moved to `/home/gys/Projects/nlp-assignment-3`; course materials keep only the proposal and papers. The download continues through its open file handle in the moved directory.
+
+Task 1: complete — 8 data tests failed first because the loader was absent, then passed (NumPy-only test environment while GPU wheels download). Covers neutral filtering, train-only moments, mask semantics, finite-value imputation, leakage across all rows and checksum refusal. Commit 73b5a6e.
+
+Task 2: in progress.
+
+Task 2: complete — 27/27 suite tests pass; all three models are padding invariant and remain finite under every missing-stream condition. Gradients reach all valid modalities; independently initialized Transformer layers and all three ablation switches verified. CUDA-enabled PyTorch uses the already cached compatible CUDA 13.0 wheel.
+
+Task 3: in progress.
