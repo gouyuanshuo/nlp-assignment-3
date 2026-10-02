@@ -21,3 +21,7 @@ Task 2: in progress.
 Task 2: complete — 27/27 suite tests pass; all three models are padding invariant and remain finite under every missing-stream condition. Gradients reach all valid modalities; independently initialized Transformer layers and all three ablation switches verified. CUDA-enabled PyTorch uses the already cached compatible CUDA 13.0 wheel.
 
 Task 3: in progress.
+
+Task 3: complete — 32/32 suite passed. Real tiny training/reload cycles cover all three models, deterministic same-seed predictions, validation F1/loss selection, no test-split access and overwrite protection.
+
+Task 4: implementation and tests added; final task verification in progress.
