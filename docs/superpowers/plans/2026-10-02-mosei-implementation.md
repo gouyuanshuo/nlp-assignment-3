@@ -37,10 +37,10 @@
 
 **Interfaces:** `prepare_data(source: Path, output: Path, expected_sha256: str) -> dict`; `load_data(directory: Path) -> PreparedData`; `PreparedData.splits` contains `FeatureDataset` with tensors, boolean valid masks, binary labels, IDs, video IDs, raw text and original labels. Prepared arrays saved without pickle, plus audit/normalization metadata.
 
-- [ ] Write and run failing tests for neutral exclusion, train-only normalization, metadata masks, padding, non-finite values and duplicate/cross-split video IDs.
-- [ ] Implement strict aligned-release schema validation, streaming SHA-256 verification before pickle loading, source-video audit, per-feature finite moments and safe prepared cache.
-- [ ] Verify: `.venv/bin/python -m pytest tests/test_data.py -q` → all pass.
-- [ ] Record evidence and commit the independently usable preparation layer.
+- [x] Write and run failing tests for neutral exclusion, train-only normalization, metadata masks, padding, non-finite values and duplicate/cross-split video IDs.
+- [x] Implement strict aligned-release schema validation, streaming SHA-256 verification before pickle loading, source-video audit, per-feature finite moments and safe prepared cache.
+- [x] Verify: `.venv/bin/python -m pytest tests/test_data.py -q` → all pass.
+- [x] Record evidence and commit the independently usable preparation layer.
 
 ## Task 2: Three models and ablation switches
 
@@ -48,10 +48,10 @@
 
 **Interfaces:** `ModelConfig`; `build_model(config: ModelConfig, feature_dims: dict[str,int]) -> nn.Module`; model forward accepts modality tensor dictionary and valid-mask dictionary and returns [batch,2] logits.
 
-- [ ] Write/run failing tests for padding invariance, stream removal, gradients and ablation execution across all models.
-- [ ] Implement masked mean, text MLP, pooled projected-concatenation MLP, and independently initialized Transformer layers with CLS, sinusoidal positions and optional modality embeddings.
-- [ ] Verify: `.venv/bin/python -m pytest -q` → all pass, including finite loss/gradients under every missing stream.
-- [ ] Record evidence and commit model layer.
+- [x] Write/run failing tests for padding invariance, stream removal, gradients and ablation execution across all models.
+- [x] Implement masked mean, text MLP, pooled projected-concatenation MLP, and independently initialized Transformer layers with CLS, sinusoidal positions and optional modality embeddings.
+- [x] Verify: `.venv/bin/python -m pytest -q` → all pass, including finite loss/gradients under every missing stream.
+- [x] Record evidence and commit model layer.
 
 ## Task 3: Reproducible training and checkpoint restoration
 
@@ -59,10 +59,10 @@
 
 **Interfaces:** `ExperimentConfig`; `train_run(data: PreparedData, config: ExperimentConfig, output: Path) -> dict`; `restore_run(run: Path, device: str) -> (model, metadata)`; `predict(model, dataset, batch_size, device, condition) -> prediction records`.
 
-- [ ] Write/run failing tests for validation tie-breaks, repeatable toy training, checkpoint round-trip, train/valid-only access, and overwrite rejection.
-- [ ] Implement deterministic seeds, AdamW, clipping, early stopping, saved best checkpoint, per-epoch logs and provenance; expose CPU/CUDA/auto.
-- [ ] Verify: `.venv/bin/python -m pytest -q` → all pass, including a tiny real train/reload cycle.
-- [ ] Record evidence and commit training layer.
+- [x] Write/run failing tests for validation tie-breaks, repeatable toy training, checkpoint round-trip, train/valid-only access, and overwrite rejection.
+- [x] Implement deterministic seeds, AdamW, clipping, early stopping, saved best checkpoint, per-epoch logs and provenance; expose CPU/CUDA/auto.
+- [x] Verify: `.venv/bin/python -m pytest -q` → all pass, including a tiny real train/reload cycle.
+- [x] Record evidence and commit training layer.
 
 ## Task 4: Matched robustness and paired reporting
 
@@ -70,10 +70,10 @@
 
 **Interfaces:** `Condition`; `corrupt_batch(features, masks, ids, condition) -> (features,masks)`; `evaluate_run(data, run, split, robustness) -> dict`; `summarize_runs(run_dirs, output, bootstrap_samples) -> dict`.
 
-- [ ] Write/run failing tests for per-ID/batch-invariant corruption, untouched padding, literal confusion/F1 values, source-video bootstrap and pairing guards.
-- [ ] Implement clean + 12 corruption conditions, per-clip predictions, degradation from clean, CSV/JSON/PNG exports, seed mean/std and paired video-cluster intervals.
-- [ ] Verify: `.venv/bin/python -m pytest -q` → all pass with missing modality and noise reproducible across models.
-- [ ] Record evidence and commit evaluation/report layer.
+- [x] Write/run failing tests for per-ID/batch-invariant corruption, untouched padding, literal confusion/F1 values, source-video bootstrap and pairing guards.
+- [x] Implement clean + 12 corruption conditions, per-clip predictions, degradation from clean, CSV/JSON/PNG exports, seed mean/std and paired video-cluster intervals.
+- [x] Verify: `.venv/bin/python -m pytest -q` → all pass with missing modality and noise reproducible across models.
+- [x] Record evidence and commit evaluation/report layer.
 
 ## Task 5: CLI, experiment matrix, demo and documented run
 
@@ -81,11 +81,11 @@
 
 **Interfaces:** `python -m mosei {prepare,train,evaluate,report,demo}`. Core/ablation configs share training defaults. Matrix script runs chosen configs/seeds and evaluates only after training/selection. Demo compares a chosen held-out clip with text-only baseline.
 
-- [ ] Write/run an end-to-end CLI test against a clearly synthetic MMSA-format fixture: prepare → train → reload → robustness evaluation → report → demo.
-- [ ] Implement CLI and safe download helper, pin dependencies, document data source/feature provenance/label rule and exact commands.
+- [x] Write/run an end-to-end CLI test against a clearly synthetic MMSA-format fixture: prepare → train → reload → robustness evaluation → report → demo.
+- [x] Implement CLI and safe download helper, pin dependencies, document data source/feature provenance/label rule and exact commands.
 - [ ] Download and audit the actual feature release if accessible; run real-data train/validation and demo smoke checks on available GPU. Record experimental scope honestly.
 - [ ] Verify: full pytest suite, ruff, package install, CLI smoke, CUDA availability and actual-data checks when available.
-- [ ] Request one independent final code review under the executing-plans skill, fix consequential findings with regression tests, and record final verification.
+- [x] Request one independent final code review under the executing-plans skill, fix consequential findings with regression tests, and record final verification.
 
 ## Execution decisions
 

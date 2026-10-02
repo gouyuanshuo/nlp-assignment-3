@@ -2,7 +2,7 @@
 
 Approved specification: /home/gys/Course/2026-Spring-42173-Advanced-Natural-Language-Processing/04_Assignments/Assignment_03_Cross_Modal_Conflict/Plan/Assignment3_Transformer_Fusion_CMU_MOSEI_Project_Plan.docx.
 
-Status: Task 1 in progress. Task 2–5 pending.
+Status: Tasks 1–4 complete. Task 5 software and review complete; real-release download/audit and GPU data smoke check pending.
 
 Pre-flight: Task 1's valid masks and train-fitted normalization feed every model; Task 2's two-logit interface feeds training/prediction; Task 3's checkpoint metadata supplies evaluation and demo; Task 4's ID-keyed predictions supply paired reports. No interface conflicts found.
 
@@ -31,3 +31,9 @@ Task 4: complete — 38/38 suite passed. Per-ID deterministic Gaussian noise, in
 Task 5: in progress. End-to-end command-line test written before CLI.
 
 Task 5: software implemented — CLI prepare/train/evaluate/report/demo works end-to-end on synthetic fixtures; matrix runner freezes settings and supports train-only; downloader verifies byte ranges and checksums; uv.lock pins dependencies. Actual Kaggle archive download remains in progress.
+
+Final review: independent gpt-6-astra reviewer found no critical issues and one important mask-metadata issue. Fixed inconsistent and invalid same-modality mask/length representations, including explicit text vs BERT mask conflicts; preserved legitimate audio/text validity differences. Three regression failures observed before the fix; complete suite now 46/46 passing.
+
+Review scope decisions: actual data/schema/performance will be checked after download; raw encoders and published comparator reproductions remain optional beyond this implementation; final report prose/slides await experimental evidence and group ownership; deliberate external cache tampering is outside this local workflow. Cache provenance and metadata compatibility are checked.
+
+CUDA verification: default 1,347,330-parameter Transformer completed 10 synthetic batch-32, length-50 optimization steps with finite loss/gradients in 0.65 seconds; peak allocated GPU memory approximately 253 MB. This is an execution check, not model-quality evidence.

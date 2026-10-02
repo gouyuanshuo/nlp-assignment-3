@@ -73,3 +73,25 @@ def test_empty_class_and_out_of_range_labels_rejected(tmp_path, raw_features):
     raw_features["valid"]["regression_labels"][0] = -4
     with pytest.raises(ValueError, match="label"):
         prepare(tmp_path, raw_features)
+
+
+@pytest.mark.parametrize("lengths", [[1, 2, 1], [999, 2, 1]])
+def test_mask_does_not_hide_conflicting_or_invalid_lengths(tmp_path, raw_features, lengths):
+    raw_features["train"]["audio_mask"] = raw_features["train"]["text_bert"][:, 1].copy()
+    raw_features["train"]["audio_lengths"] = np.array(lengths)
+    with pytest.raises(ValueError, match="Conflicting|length"):
+        prepare(tmp_path, raw_features)
+
+
+def test_explicit_text_mask_must_agree_with_bert_attention_mask(tmp_path, raw_features):
+    raw_features["train"]["text_mask"] = np.ones((3, 3))
+    with pytest.raises(ValueError, match="Conflicting"):
+        prepare(tmp_path, raw_features)
+
+
+def test_consistent_audio_metadata_can_differ_from_text_metadata(tmp_path, raw_features):
+    raw_features["train"]["audio_lengths"] = np.array([1, 1, 1])
+    raw_features["train"]["audio_mask"] = np.array([[1, 0, 0]] * 3)
+    data, _ = prepare(tmp_path, raw_features)
+    assert data.splits["train"].masks["audio"][0].tolist() == [True, False, False]
+    assert data.splits["train"].masks["text"][0].tolist() == [True, True, False]

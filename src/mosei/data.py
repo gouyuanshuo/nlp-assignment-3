@@ -73,11 +73,11 @@ def _strings(values) -> list[str]:
 
 def _mask(raw: dict, modality: str, shape: tuple, shared: np.ndarray | None):
     n, length, _ = shape
+    candidates = []
     key = f"{modality}_mask"
     if key in raw:
-        value = np.asarray(raw[key])
-        provenance = key
-    elif f"{modality}_lengths" in raw:
+        candidates.append((np.asarray(raw[key]), key))
+    if f"{modality}_lengths" in raw:
         lengths = np.asarray(raw[f"{modality}_lengths"])
         if lengths.shape != (n,) or not np.isfinite(lengths).all():
             raise ValueError(f"Invalid {modality} lengths")
@@ -87,18 +87,23 @@ def _mask(raw: dict, modality: str, shape: tuple, shared: np.ndarray | None):
             or np.any(lengths != lengths.astype(int))
         ):
             raise ValueError(f"Invalid {modality} lengths for aligned sequence length {length}")
-        value = np.arange(length)[None, :] < lengths[:, None]
-        provenance = f"{modality}_lengths"
-    elif shared is not None:
-        value = shared
-        provenance = "text_bert attention mask (word-aligned release)"
-    else:
+        candidates.append((np.arange(length)[None, :] < lengths[:, None], f"{modality}_lengths"))
+    # BERT attention is another description of text validity. For audio/vision
+    # it is only an aligned-release fallback, since explicit stream masks may differ.
+    if shared is not None and (modality == "text" or not candidates):
+        candidates.append((shared, "text_bert attention mask (word-aligned release)"))
+    if not candidates:
         raise ValueError(
             f"Missing documented mask or lengths for {modality}; cannot infer BERT padding"
         )
-    if value.shape != (n, length) or not np.isin(value, [0, 1]).all():
-        raise ValueError(f"Invalid {modality} mask: expected {(n, length)} with only 0/1 values")
-    return value.astype(bool), provenance
+    for value, _ in candidates:
+        if value.shape != (n, length) or not np.isin(value, [0, 1]).all():
+            raise ValueError(
+                f"Invalid {modality} mask: expected {(n, length)} with only 0/1 values"
+            )
+        if not np.array_equal(value, candidates[0][0]):
+            raise ValueError(f"Conflicting {modality} mask/length metadata")
+    return candidates[0][0].astype(bool), "; ".join(source for _, source in candidates)
 
 
 def _moments(array, mask, indices):
