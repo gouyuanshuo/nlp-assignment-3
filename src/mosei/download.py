@@ -16,15 +16,20 @@ AUTHORS_URL = "https://drive.usercontent.google.com/download?id=16LfoCDw8LncJMVH
 def download_file(
     url: str,
     output: Path,
-    expected_sha256: str = MOSEI_SHA256,
+    expected_sha256: str | None = MOSEI_SHA256,
     workers: int = 4,
     chunk_bytes: int = 64 * 1024 * 1024,
+    expected_size: int | None = None,
 ) -> Path:
     output = Path(output)
     if workers < 1 or chunk_bytes < 1:
         raise ValueError("Download workers and chunk size must be positive")
+    if expected_sha256 is None and (expected_size is None or expected_size < 1):
+        raise ValueError("A known size is required when no published checksum is available")
     if output.exists():
-        if sha256_file(output) != expected_sha256:
+        if expected_size is not None and output.stat().st_size != expected_size:
+            raise ValueError(f"Existing file size differs from catalogue: {output}")
+        if expected_sha256 is not None and sha256_file(output) != expected_sha256:
             raise ValueError(f"Existing file SHA-256 differs from the trusted checksum: {output}")
         return output
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -36,6 +41,8 @@ def download_file(
             )
         total = int(content_range.rsplit("/", 1)[1])
         resolved_url = response.geturl()
+    if expected_size is not None and total != expected_size:
+        raise ValueError("Remote file size differs from pinned catalogue")
     parts = output.with_suffix(output.suffix + ".parts")
     info = {"total_bytes": total, "expected_sha256": expected_sha256, "chunk_bytes": chunk_bytes}
     parts.mkdir(exist_ok=True)
@@ -87,7 +94,7 @@ def download_file(
             with (parts / f"{index:06d}").open("rb") as source:
                 shutil.copyfileobj(source, target, 8 * 1024 * 1024)
     digest = sha256_file(staging)
-    if digest != expected_sha256:
+    if expected_sha256 is not None and digest != expected_sha256:
         raise ValueError(f"Downloaded SHA-256 mismatch: {digest}; archive has not been accepted")
     staging.replace(output)
     shutil.rmtree(parts)

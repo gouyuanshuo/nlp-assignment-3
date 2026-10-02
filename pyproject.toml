@@ -11,6 +11,7 @@ dependencies = ["torch>=2.5,<3", "numpy>=1.26,<3", "scikit-learn>=1.4,<2", "matp
 
 [project.optional-dependencies]
 dev = ["pytest>=8,<10", "ruff>=0.9"]
+video = ["h5py>=3.12,<4", "transformers>=4.48,<5", "faster-whisper>=1.1,<2", "gradio>=5.20,<6"]
 
 [project.scripts]
 mosei = "mosei.cli:main"
