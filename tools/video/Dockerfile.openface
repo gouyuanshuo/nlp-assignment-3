@@ -1,0 +1,4 @@
+FROM algebr/openface@sha256:f43ad4e7fa4530143c7a9e0e8eca7e4f2b45599c1ef19680b68ad1eebba05197
+# Upstream ships its CE-CLM weights mode 0600. Permit the host UID to read
+# those immutable models so extracted files need not be owned by root.
+RUN chmod a+r /home/openface-build/build/bin/model/patch_experts/cen*.dat

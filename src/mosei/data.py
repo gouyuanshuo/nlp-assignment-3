@@ -280,7 +280,7 @@ def load_data(directory: Path) -> PreparedData:
     directory = Path(directory)
     audit = read_json(directory / "audit.json")
     normalization = read_json(directory / "normalization.json")
-    if audit["cache_version"] != CACHE_VERSION or audit["label_rule"] != LABEL_RULE:
+    if audit["cache_version"] not in {CACHE_VERSION, 2} or audit["label_rule"] != LABEL_RULE:
         raise ValueError("Incompatible prepared data protocol")
     check = dict(audit)
     saved_fingerprint = check.pop("fingerprint")
@@ -294,11 +294,18 @@ def load_data(directory: Path) -> PreparedData:
         def array(name):
             return np.load(folder / f"{name}.npy", mmap_mode="r", allow_pickle=False)
 
-        splits[split] = FeatureDataset(
+        dataset_class, extra = FeatureDataset, {}
+        if audit["cache_version"] == 2:
+            from .window_data import WindowDataset
+
+            dataset_class = WindowDataset
+            extra = {name: array(name) for name in ("offsets", "durations", "intervals")}
+        splits[split] = dataset_class(
             features={m: array(m) for m in MODALITIES},
             masks={m: array(m + "_mask") for m in MODALITIES},
             labels=array("labels"),
             scores=array("scores"),
             **clips,
+            **extra,
         )
     return PreparedData(directory, splits, normalization, audit)

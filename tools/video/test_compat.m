@@ -1,0 +1,13 @@
+pkg load signal;
+pkg load optim;
+addpath(genpath('/opt/covarep'));
+rmpath('/opt/covarep/external/backcompatibility_2015');
+addpath('/opt/compat');
+assert(test('/opt/compat/lpc.m'));
+[v,k] = findpeaks([-3,-1,-2,2,0]);
+assert(k(:)', [2,4]); assert(v(:)', [-1,2]);
+assert(interp1q([0;1], [0;10], [0.25;0.75]), [2.5;7.5]);
+assert(isnan(interp1q([0;1], [0;10], 2)));
+x = [1, 2, 3, 4];
+assert(real(ifft(fft(x))), x, 1e-12);
+disp('COVAREP compatibility checks passed');

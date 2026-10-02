@@ -1,13 +1,14 @@
 """Freeze a matrix, train every run, then evaluate the fixed checkpoints."""
 
 import argparse
+import time
 from dataclasses import asdict, replace
 from pathlib import Path
 
 from mosei.config import load_config
 from mosei.data import load_data
 from mosei.evaluate import evaluate_run
-from mosei.io import write_json
+from mosei.io import read_json, write_json
 from mosei.report import summarize_runs
 from mosei.train import train_run
 
@@ -39,6 +40,9 @@ def main():
         help="Leave held-out evaluation for a later, frozen decision",
     )
     parser.add_argument("--bootstrap-samples", type=int, default=2000)
+    parser.add_argument(
+        "--resume", action="store_true", help="Resume the frozen matrix and its epoch checkpoints"
+    )
     args = parser.parse_args()
     try:
         paths = args.configs + (
@@ -67,7 +71,7 @@ def main():
         ):
             raise ValueError("Experiment names must be safe filename components")
         data = load_data(args.data)
-        args.output.mkdir(parents=True, exist_ok=False)
+        args.output.mkdir(parents=True, exist_ok=args.resume)
         manifest = {
             "status": "training",
             "data_fingerprint": data.fingerprint,
@@ -75,20 +79,50 @@ def main():
             "seeds": args.seeds,
             "evaluation": "test split; argmax; clean + 12 matched corruption conditions; noise seed 2026",
             "selection": "highest validation macro F1, then lowest validation cross-entropy",
+            "bootstrap_samples": args.bootstrap_samples,
         }
+        previous = args.output / "manifest.json"
+        if previous.exists():
+            recorded = read_json(previous)
+            for key in (
+                "data_fingerprint",
+                "configs",
+                "seeds",
+                "evaluation",
+                "selection",
+                "bootstrap_samples",
+            ):
+                if recorded[key] != manifest[key]:
+                    raise ValueError(f"Resume matrix changed its frozen {key}")
         write_json(args.output / "manifest.json", manifest)
         runs = []
         for config in configs:
             for seed in args.seeds:
                 run = args.output / f"{config.name}-seed{seed}"
-                train_run(data, replace(config, training=replace(config.training, seed=seed)), run)
+                train_run(
+                    data,
+                    replace(config, training=replace(config.training, seed=seed)),
+                    run,
+                    resume=args.resume,
+                )
                 runs.append(run)
         manifest["status"] = "trained"
         write_json(args.output / "manifest.json", manifest)
         if not args.train_only:
             for run in runs:
+                evaluation = run / "evaluation/test"
+                if args.resume and (evaluation / "metrics.json").is_file():
+                    continue
+                if evaluation.exists():
+                    # Preserve interrupted output while recomputing its fixed evaluation.
+                    evaluation.rename(evaluation.with_name(f"test-interrupted-{time.time_ns()}"))
                 evaluate_run(data, run, robustness=True, device=args.device)
-            summarize_runs(runs, args.output / "report", args.bootstrap_samples)
+            report = args.output / "report"
+            if not (report / "complete.json").is_file():
+                if report.exists():
+                    report.rename(report.with_name(f"report-interrupted-{time.time_ns()}"))
+                summarize_runs(runs, report, args.bootstrap_samples)
+                write_json(report / "complete.json", {"bootstrap_samples": args.bootstrap_samples})
             manifest["status"] = "evaluated"
             write_json(args.output / "manifest.json", manifest)
         print(f"Experiment matrix {manifest['status']}: {args.output}")

@@ -1,0 +1,6 @@
+ARG BASE=mosei-covarep:local
+FROM ${BASE}
+COPY covarep/ /opt/covarep/
+COPY compat/ /opt/compat/
+RUN octave --no-gui --quiet /opt/compat/test_compat.m
+ENTRYPOINT ["octave", "--no-gui", "--quiet", "/opt/compat/run_covarep.m"]

@@ -1,36 +1,23 @@
 # Video prototype implementation progress
 
 Plan: `docs/superpowers/plans/2026-10-03-video-upload-prototype.md`.
-Spec approved by the user on 2026-10-03.
+Approved design: `docs/superpowers/specs/2026-10-03-video-upload-prototype-design.md`.
 
-- Task 1: in progress — real CSD reader and resumable downloader pass tests;
-  native extractor compatibility is being checked while large files download.
-- Task 2: complete — shared alignment, windows and frozen BERT wordpiece pooling;
-  11 focused tests passed after observed missing-module failures.
-- Task 3: in progress — preparation and clip-level training.
-- Task 4: pending — uploaded-video extraction.
-- Task 5: pending — browser interface and CLI.
-- Task 6: pending — revised experiments, evidence and proposal.
+- Task 1: complete implementation and extractor checks; full selected CSD download is still running. Reader/schema tests and all real label/word rows pass; native tools processed a spoken clip.
+- Task 2: complete — shared alignment, masks, windows, BERT and normalization. All windows are retained.
+- Task 3: complete implementation — CSD cache and clip-level training tested; all three models trained and restored on a small real integration subset. Full-fold research runs remain pending.
+- Task 4: complete implementation and real extraction/inference check — English speech, voice and face features reach the trained integration checkpoint.
+- Task 5: API upload and silent-error checks passed. CLI and localhost interface implemented. Visual browser inspection remains pending: no browser was available through the session's computer-use tool.
+- Task 6: Colab notebooks, durable epoch/matrix resume, source bundle and updated proposal prepared. Full Colab training, frozen held-out evaluation and final research conclusions remain pending.
 
-Ruling: continue native implementation in the existing dedicated Projects repo
-after approval of the written design — the user already requested implementation
-and the governing collaboration instructions prohibit redundant authorization
-requests. No remote publication or shared-branch merge is included.
+## Decisions and costs
 
-Pre-flight: Tasks 1/2 establish named timestamped streams and a fingerprinted
-manifest; Tasks 3/4 consume exactly those shared preprocessing interfaces. Task 3
-retains one label per clip despite multiple windows; Tasks 4/5 use the same
-duration-weighted logit aggregation. Existing caches remain on their original
-loader path and cannot be used by the video-upload command.
+1. Continue in the existing dedicated Projects implementation branch. The user already authorized implementation; code and data stay out of Course. The existing Course proposal is edited in place with a preserved backup. No remote publish or shared-branch merge is included.
+2. Exclude COVAREP `creak` from both training and uploads because it requires a MATLAB toolbox unavailable in Octave. Cost: one acoustic channel. Preserve actual upstream feature families; never fabricate substitutes.
+3. Preserve label segments in source storage order, because real CSD annotations are not chronologically sorted. Cost: overlapping source annotations may share speech context; they retain separate original IDs within the same video fold. Feature streams still require ordered timestamps.
+4. Use Colab for the full matrix following the user's confirmation of 200 compute units and GPU access. Local tiny runs establish integration only. Cost: final performance remains unknown until the authenticated cloud run and evaluation finish.
+5. Use real Gradio API uploads for the available automated check; retain visual playback/layout review as an explicit acceptance item. Cost: UI appearance has not been verified in a connected browser.
 
-Verification so far: 67 tests passed; Ruff check and format check passed.
-Real labels/words load; official SDK folds have 2249/300/678 source videos.
-CSD metadata confirms 74 named COVAREP features and the OpenFace 2 columns.
-BERT and Whisper model snapshots are downloaded at pinned revisions.
+Historical extractor settings are not fully documented by the CSD release. Schema, feature families, units, masks and alignment are verified; numerical identity to historical features is not claimed. The report must distinguish released-transcript benchmark performance from automatic-transcript uploads.
 
-Task 1: Ruling: exclude COVAREP `creak` from both training and upload inference —
-upstream documents a MATLAB Neural Networks Toolbox dependency unavailable in
-Octave — costs one acoustic feature; never replace it with fabricated zeros.
-Native smoke testing also exposed obsolete `wavread`, missing Octave `lpc`, and
-different `findpeaks` semantics; these remain compatibility work, not a passed
-extraction check.
+See [execution evidence](video-prototype-verification.md) and [Colab instructions](../README.md).

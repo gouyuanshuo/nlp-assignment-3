@@ -15,9 +15,10 @@ from torch.utils.data import DataLoader
 
 from .config import ExperimentConfig, config_from_dict
 from .data import LABEL_RULE, FeatureDataset, PreparedData
-from .io import write_json
+from .io import read_json, write_json
 from .metrics import classification_metrics
 from .models import build_model
+from .window_data import clip_logits, collate_clips
 
 
 def choose_device(requested: str) -> str:
@@ -59,15 +60,19 @@ def predict(
 ) -> list[dict]:
     model.eval()
     records = []
-    for batch in DataLoader(dataset, batch_size=batch_size, shuffle=False):
+    for batch in DataLoader(
+        dataset, batch_size=batch_size, shuffle=False, collate_fn=collate_clips
+    ):
         features, masks = batch["features"], batch["masks"]
         if condition is not None:
             from .evaluate import corrupt_batch
 
-            features, masks = corrupt_batch(features, masks, batch["id"], condition)
+            features, masks = corrupt_batch(features, masks, batch["window_ids"], condition)
         features = {m: v.to(device) for m, v in features.items()}
         masks = {m: v.to(device) for m, v in masks.items()}
-        logits = model(features, masks)
+        logits = clip_logits(
+            model(features, masks), batch["clip_indices"], batch["durations"], len(batch["id"])
+        )
         if not torch.isfinite(logits).all():
             raise FloatingPointError("Non-finite prediction logits")
         probabilities = logits.softmax(dim=-1).cpu()
@@ -103,9 +108,38 @@ def _git_commit():
         return None
 
 
-def train_run(data: PreparedData, config: ExperimentConfig, output: Path) -> dict:
+def _save_checkpoint(path, value):
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    torch.save(value, temporary)
+    temporary.replace(path)
+
+
+def train_run(data: PreparedData, config: ExperimentConfig, output: Path, *, resume=False) -> dict:
     output = Path(output)
-    output.mkdir(parents=True, exist_ok=False)
+    state = None
+    if output.exists():
+        if not resume:
+            raise FileExistsError(f"Training directory already exists: {output}")
+        if read_json(output / "config.json") != asdict(config):
+            raise ValueError("Resume configuration differs from the saved run")
+        if read_json(output / "data_audit.json")["fingerprint"] != data.fingerprint:
+            raise ValueError("Resume data fingerprint differs from the saved run")
+        if (output / "run.json").is_file():
+            return read_json(output / "run.json")
+        if (output / "last.pt").is_file():
+            state = torch.load(output / "last.pt", map_location="cpu", weights_only=True)
+            if (
+                state["metadata"]["config"] != asdict(config)
+                or state["metadata"]["data_fingerprint"] != data.fingerprint
+            ):
+                raise ValueError("Resume checkpoint configuration/data differs")
+        else:
+            print(
+                "No completed epoch state was saved; restarting this run from its original seed.",
+                flush=True,
+            )
+    else:
+        output.mkdir(parents=True, exist_ok=False)
     settings = config.training
     seed_everything(settings.seed)
     torch.set_num_threads(settings.threads)
@@ -122,6 +156,7 @@ def train_run(data: PreparedData, config: ExperimentConfig, output: Path) -> dic
         generator=generator,
         num_workers=settings.num_workers,
         pin_memory=device == "cuda",
+        collate_fn=collate_clips,
     )
     metadata = {
         "config": asdict(config),
@@ -140,12 +175,40 @@ def train_run(data: PreparedData, config: ExperimentConfig, output: Path) -> dic
         "device_name": torch.cuda.get_device_name(0) if device == "cuda" else "CPU",
         "trainable_parameters": sum(p.numel() for p in model.parameters() if p.requires_grad),
     }
+    if "feature_manifest" in data.audit:
+        metadata["feature_manifest"] = data.audit["feature_manifest"]
+        metadata["window_aggregation"] = "duration-weighted mean logits before loss/softmax"
+        metadata["smoke_checkpoint"] = bool(
+            data.audit.get("smoke_max_clips_per_split")
+            or "smoke" in data.audit.get("folds_source", {}).get("purpose", "").lower()
+        )
     write_json(output / "config.json", asdict(config))
     write_json(output / "data_audit.json", data.audit)
     history, best, stale = [], None, 0
+    completed, elapsed_before = 0, 0.0
     started = time.perf_counter()
     best_epoch = 0
-    for epoch in range(1, settings.epochs + 1):
+    if state is not None:
+        model.load_state_dict(state["state_dict"], strict=True)
+        optimizer.load_state_dict(state["optimizer"])
+        history, best, best_epoch, stale = (
+            state[k] for k in ("history", "best", "best_epoch", "stale")
+        )
+        completed, elapsed_before = state["epoch"], state["elapsed_seconds"]
+        generator.set_state(state["rng"]["loader"])
+        torch.set_rng_state(state["rng"]["torch"])
+        if device == "cuda" and state["rng"]["cuda"]:
+            torch.cuda.set_rng_state_all(state["rng"]["cuda"])
+        random.setstate(state["rng"]["python"])
+        numpy_rng = state["rng"]["numpy"]
+        np.random.set_state(
+            (numpy_rng[0], np.asarray(numpy_rng[1], dtype=np.uint32), *numpy_rng[2:])
+        )
+        metadata["resumed_from_epoch"] = completed
+        metadata["previous_device_name"] = state["metadata"]["device_name"]
+        print(f"Resuming {config.name} after epoch {completed}", flush=True)
+    final_epoch = completed if stale >= settings.patience else settings.epochs
+    for epoch in range(completed + 1, final_epoch + 1):
         epoch_start = time.perf_counter()
         model.train()
         loss_sum, seen = 0.0, 0
@@ -153,7 +216,9 @@ def train_run(data: PreparedData, config: ExperimentConfig, output: Path) -> dic
             features, masks = _inputs(batch, device)
             labels = batch["label"].to(device)
             optimizer.zero_grad(set_to_none=True)
-            logits = model(features, masks)
+            logits = clip_logits(
+                model(features, masks), batch["clip_indices"], batch["durations"], len(labels)
+            )
             loss = nn.functional.cross_entropy(logits, labels)
             if not torch.isfinite(loss):
                 raise FloatingPointError(f"Non-finite training loss at epoch {epoch}")
@@ -191,11 +256,31 @@ def train_run(data: PreparedData, config: ExperimentConfig, output: Path) -> dic
                     "best_validation": best,
                 },
             }
-            temp = output / "best.pt.tmp"
-            torch.save(checkpoint, temp)
-            temp.replace(output / "best.pt")
+            _save_checkpoint(output / "best.pt", checkpoint)
         else:
             stale += 1
+        numpy_rng = np.random.get_state()
+        _save_checkpoint(
+            output / "last.pt",
+            {
+                "state_dict": model.state_dict(),
+                "optimizer": optimizer.state_dict(),
+                "metadata": metadata,
+                "epoch": epoch,
+                "history": history,
+                "best": best,
+                "best_epoch": best_epoch,
+                "stale": stale,
+                "elapsed_seconds": elapsed_before + time.perf_counter() - started,
+                "rng": {
+                    "torch": torch.get_rng_state(),
+                    "cuda": torch.cuda.get_rng_state_all() if device == "cuda" else [],
+                    "loader": generator.get_state(),
+                    "python": random.getstate(),
+                    "numpy": [numpy_rng[0], numpy_rng[1].tolist(), *numpy_rng[2:]],
+                },
+            },
+        )
         if stale >= settings.patience:
             break
     result = {
@@ -203,7 +288,7 @@ def train_run(data: PreparedData, config: ExperimentConfig, output: Path) -> dic
         "best_epoch": best_epoch,
         "best_validation": best,
         "epochs_completed": len(history),
-        "training_seconds": time.perf_counter() - started,
+        "training_seconds": elapsed_before + time.perf_counter() - started,
     }
     write_json(output / "run.json", result)
     return result

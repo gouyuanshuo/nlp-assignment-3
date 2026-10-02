@@ -36,6 +36,11 @@ def _parser():
     train.add_argument("--seed", type=int)
     train.add_argument("--epochs", type=int)
     train.add_argument("--device", choices=["auto", "cpu", "cuda"])
+    train.add_argument(
+        "--resume",
+        action="store_true",
+        help="Resume the saved epoch state with unchanged config/data",
+    )
     evaluate = commands.add_parser("evaluate", help="Evaluate a frozen checkpoint")
     evaluate.add_argument("--data", type=Path, required=True)
     evaluate.add_argument("--run", type=Path, required=True)
@@ -63,6 +68,34 @@ def _parser():
     clip.add_argument("--index", type=int, default=0)
     clip.add_argument("--clip-id")
     demo.add_argument("--device", choices=["auto", "cpu", "cuda"], default="auto")
+    csd = commands.add_parser(
+        "prepare-csd", help="Prepare word-aligned CSD features for video inference"
+    )
+    csd.add_argument("--source", type=Path, required=True)
+    csd.add_argument("--output", type=Path, required=True)
+    csd.add_argument("--tools", type=Path, required=True)
+    csd.add_argument("--splits", type=Path, required=True)
+    csd.add_argument("--device", choices=["auto", "cpu", "cuda"], default="auto")
+    csd.add_argument("--max-clips", type=int, help="Integration smoke only: cap each split")
+    doctor = commands.add_parser(
+        "doctor", help="Verify models, preprocessing and native extraction tools"
+    )
+    doctor.add_argument("--tools", type=Path, required=True)
+    doctor.add_argument("--run", type=Path, help="Also verify checkpoint compatibility")
+    for name, help_text in [
+        ("video", "Classify an uploaded/new local video"),
+        ("serve", "Launch the localhost video-upload interface"),
+    ]:
+        command = commands.add_parser(name, help=help_text)
+        command.add_argument("--run", type=Path, required=True)
+        command.add_argument("--tools", type=Path, required=True)
+        command.add_argument("--device", choices=["auto", "cpu", "cuda"], default="auto")
+        if name == "video":
+            command.add_argument("--input", type=Path, required=True)
+            command.add_argument("--output", type=Path)
+        else:
+            command.add_argument("--host", choices=["127.0.0.1", "localhost"], default="127.0.0.1")
+            command.add_argument("--port", type=int, default=7860)
     return parser
 
 
@@ -110,6 +143,55 @@ def main(argv=None):
     try:
         if args.command == "prepare":
             result = prepare_data(args.source, args.output, args.sha256)
+        elif args.command == "prepare-csd":
+            from .csd_prepare import prepare_csd
+            from .video_pipeline import check_tools
+
+            tools = check_tools(args.tools, native=False)
+            from .io import read_json
+
+            if read_json(args.tools.parent / "feature-manifest.json") != tools["manifest"]:
+                raise ValueError("Feature manifest differs from the verified tool bundle")
+            result = prepare_csd(
+                args.source,
+                args.output,
+                args.tools.parent / "feature-manifest.json",
+                args.splits,
+                model_path=Path(tools["paths"]["text"]),
+                device=choose_device(args.device),
+                max_clips=args.max_clips,
+            )
+            if result["feature_manifest"] != tools["manifest"]:
+                raise ValueError("Prepared feature manifest differs from the tool bundle")
+        elif args.command == "doctor":
+            from .video_pipeline import check_tools, ensure_compatible
+
+            tools = check_tools(args.tools)
+            if args.run:
+                _, metadata = restore_run(args.run)
+                ensure_compatible(metadata, tools["manifest"])
+            result = {"ready": True, "feature_fingerprint": tools["fingerprint"]}
+        elif args.command in {"video", "serve"}:
+            from .video_pipeline import VideoClassifier
+
+            classifier = VideoClassifier(args.run, args.tools, args.device)
+            if args.command == "video":
+                result = classifier.classify(args.input)
+                if args.output:
+                    from .io import write_json
+
+                    write_json(args.output, result)
+            else:
+                from .web_demo import build_demo
+
+                build_demo(classifier).launch(
+                    server_name=args.host,
+                    server_port=args.port,
+                    share=False,
+                    show_api=False,
+                    max_file_size=200_000_000,
+                )
+                return 0
         elif args.command == "train":
             config = load_config(args.config)
             overrides = {
@@ -118,7 +200,7 @@ def main(argv=None):
                 if getattr(args, k) is not None
             }
             config = replace(config, training=replace(config.training, **overrides))
-            trained = train_run(load_data(args.data), config, args.output)
+            trained = train_run(load_data(args.data), config, args.output, resume=args.resume)
             result = {
                 "run": str(args.output),
                 "best_epoch": trained["best_epoch"],
@@ -138,7 +220,7 @@ def main(argv=None):
             result = {"output": str(args.output), "summary_rows": len(summary["summary"])}
         else:
             result = _demo(args)
-    except (ValueError, OSError, KeyError) as exc:
+    except (ValueError, OSError, KeyError, ImportError) as exc:
         parser.exit(2, f"error: {exc}\n")
     print(json.dumps(result, indent=2, allow_nan=False))
     return 0

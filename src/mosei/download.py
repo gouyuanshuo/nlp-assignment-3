@@ -1,4 +1,4 @@
-"""Resumable public dataset download with a mandatory published checksum."""
+"""Resumable public download with a trusted checksum or pinned catalogue size."""
 
 import shutil
 import time

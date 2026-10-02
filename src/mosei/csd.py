@@ -65,7 +65,7 @@ class CSDStream:
             or intervals.shape[1] != 2
             or not np.isfinite(intervals).all()
             or np.any(intervals[:, 1] < intervals[:, 0])
-            or np.any(np.diff(intervals[:, 0]) < 0)
+            or (self.root_name != "All Labels" and np.any(np.diff(intervals[:, 0]) < 0))
         ):
             raise ValueError(f"Invalid intervals in {self.root_name}/{video_id}")
         if values.ndim != 2 or values.shape != (len(intervals), len(self.feature_names)):

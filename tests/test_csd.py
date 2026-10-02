@@ -50,6 +50,18 @@ def test_column_width_mismatch_is_rejected(tmp_path):
         stream.read("video1")
 
 
+def test_independent_label_segments_preserve_source_order(tmp_path):
+    from mosei.csd import CSDStream
+
+    path = write_csd(
+        tmp_path / "labels.csd", [[-1], [2]], [[8, 10], [1, 3]], ["sentiment"], root="All Labels"
+    )
+    with CSDStream(path) as stream:
+        intervals, values = stream.read("video1")
+    assert intervals.tolist() == [[8, 10], [1, 3]]
+    assert values.tolist() == [[-1], [2]]
+
+
 def test_wrong_stream_cannot_be_used_as_another_modality(tmp_path):
     from mosei.csd import CSDStream
 

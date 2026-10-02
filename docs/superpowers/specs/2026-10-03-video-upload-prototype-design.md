@@ -1,9 +1,15 @@
 # CMU-MOSEI video upload prototype
 
-Status: approved by the user's "good" on 2026-10-03. This document defines the
-next project stage; the video upload implementation and larger dataset download
-are not yet complete. The existing code implements the earlier cached-feature
-experiment.
+Status: approved by the user's "good" on 2026-10-03. The implementation now
+processes real uploads with an explicitly marked integration checkpoint. Full
+research training will use the user's confirmed Google Colab access (200 compute
+units; actual GPU and rate measured in-session). Full training and visual browser
+acceptance remain pending; see `docs/video-prototype-verification.md`.
+
+Implementation decisions: 768 BERT dimensions, 73 COVAREP channels (MATLAB-only
+`creak` omitted on both paths), and 40 named OpenFace channels. Native tools and
+model snapshots are installed and pinned. Historical source extractor commits
+remain unknown, so schema compatibility is not numerical equivalence.
 
 ## Intended outcome
 
@@ -71,10 +77,10 @@ OpenFace, generic audio embeddings for COVAREP, or pad unrelated features into
 the expected width. If provenance or extraction cannot be made sufficiently
 reliable, report the concrete issue and revisit the raw-media alternative.
 
-The host has FFmpeg, Docker and an RTX 4060 Laptop GPU with 8 GB VRAM. OpenFace,
-COVAREP/Octave, the transcription model, BERT and the web UI are not yet installed
-in this project. COVAREP's documentation states that most functions support
-Octave; the complete required extraction path still needs execution testing.
+The host has FFmpeg, Docker and an RTX 4060 Laptop GPU with 8 GB VRAM. Pinned
+OpenFace, COVAREP/Octave, speech recognition and BERT now run locally. Tested
+Octave adapters address upstream compatibility differences; evidence records
+versions, selected columns, real-video output and remaining provenance limits.
 
 ## Training pipeline
 

@@ -1,51 +1,85 @@
-# NLP Assignment 3: multimodal sentiment with Transformer fusion
+# NLP Assignment 3: English video sentiment with Transformer fusion
 
-A PyTorch implementation of the approved CMU-MOSEI proposal. It compares text-only prediction, pooled concatenation and a compact Transformer using the same frozen English multimodal features.
+Upload an English video, extract text, voice and facial features, and classify its sentiment with a compact multimodal Transformer. Text-only and pooled-concatenation baselines use the same prepared data and training protocol.
 
-**Task:** negative sentiment (`y < 0`) versus positive sentiment (`y > 0`). Exactly neutral clips (`y == 0`) are excluded from train, validation and test. This model has no neutral class.
+**Current status:** the real video pipeline and local upload API work with a small integration checkpoint. Full research training is prepared for **Google Colab** and has not been run there yet. The initial real upload took 121.4 seconds for a 15-second clip; a subsequent API upload took 98.1 seconds. These are extraction/inference measurements, not model-training times. See [verification evidence](docs/video-prototype-verification.md).
 
-**This checkout is ready to use:** the Kaggle archive has been downloaded and verified, and `data/prepared/` already exists. All three models completed one-epoch GPU checks on the real training/validation splits. See [verification evidence](docs/verification.md) and `runs/real-data-smoke-20261002/`; the full three-seed research study is still to run. Skip the download/preparation commands when using this existing cache.
+**Task:** negative (`y < 0`) versus positive (`y > 0`). Exactly neutral clips are excluded. The model has no neutral class, and its softmax probabilities are not calibrated measures of a person's internal emotion.
 
-## Get started
+## Train in Google Colab
 
-The local checkout is `/home/gys/Projects/nlp-assignment-3`. Its environment, data, checkpoints and outputs stay in this project.
+All local code and data stay in `/home/gys/Projects/nlp-assignment-3`.
+
+1. Open [01_download_csd.ipynb](notebooks/01_download_csd.ipynb) in Colab on a **CPU runtime**. Upload `dist/mosei-colab-source.zip` when prompted and mount your Drive. It downloads about **28.4 GB** of selected CSD streams into `MyDrive/NLP_Assignment_3/csd`; interrupted transfers resume.
+2. Open [02_train_colab.ipynb](notebooks/02_train_colab.ipynb), select an available GPU (A100 preferred), and mount the same Drive. The notebook copies the source to runtime storage, regenerates frozen BERT words and saves a reusable prepared cache to Drive.
+3. Run the timing cell and enter the **units/hour shown in your Colab resource panel** and your remaining balance. It measures one epoch on the allocated GPU before estimating the matrix. Download, preparation, evaluation and idle time are separate costs; 200 units do not represent a fixed number of GPU hours. Availability and limits vary ([Colab FAQ](https://research.google.com/colaboratory/faq.html)).
+4. Run the frozen training matrix. Each completed epoch is checkpointed to Drive. Rerunning the same cells resumes after a disconnect; a partial epoch repeats. The default is six configurations × three seeds; `INCLUDE_ABLATIONS = False` runs the three core models first, but use a new matrix directory if changing a matrix already started.
+5. Once modeling choices are fixed, evaluate held-out data and export the Transformer checkpoint selected by **validation** performance. Extract the exported `selected-run/` folder into local `runs/colab/`, then launch the demo below.
+
+The notebooks require enough Drive space for source, prepared arrays and runs, and at least 55 GB free runtime disk during initial preparation. They have been checked locally but not executed in an authenticated Colab session. The bundle contains source and pinned feature manifests, not datasets, weights or credentials. Build it again after an intentional source update:
+
+```bash
+.venv/bin/python scripts/build_colab_bundle.py
+```
+
+Keep the local extractor bundle that produced the feature manifest. Changing feature code, model versions or normalization requires compatible new preparation and training.
+
+## Run the video prototype locally
+
+The existing checkout has the pinned extractors/models installed. After importing the Colab checkpoint:
 
 ```bash
 cd /home/gys/Projects/nlp-assignment-3
-uv sync --frozen --extra dev
+.venv/bin/python -m mosei doctor --run runs/colab/selected-run --tools data/tools/video-tools.json
+.venv/bin/python -m mosei serve --run runs/colab/selected-run --tools data/tools/video-tools.json
+```
+
+Open **http://127.0.0.1:7860**. Upload an English MP4, MOV or WebM, up to 60 seconds and 200 MB, with one visible speaker. The app shows a preview, processing progress, transcript, positive/negative probabilities and predictions for each speech window. Silent input, insufficient face/voice coverage and incompatible checkpoints produce errors with cleared results. Processing stays local; per-request intermediates are deleted and the preview cache expires shortly afterward.
+
+For a local pipeline demonstration before full training, replace the run path with `runs/video-integration/transformer-seed1111`. This tiny model is explicitly marked as an integration checkpoint. It is **not suitable for accuracy claims**. New uploads were exercised through the real Gradio API; visual browser review is still pending because no browser was connected to the coding session.
+
+A command-line upload is also available:
+
+```bash
+.venv/bin/python -m mosei video --run runs/colab/selected-run \
+  --tools data/tools/video-tools.json --input /path/to/clip.mp4 --output results/upload.json
+```
+
+## Reproduce setup and data preparation
+
+Python 3.12 and dependencies are pinned through `.python-version` and `uv.lock`. The local upload pipeline requires Docker, FFmpeg and FFprobe. Colab training uses the released acoustic/visual streams and does not need Docker.
+
+```bash
+uv sync --frozen --extra dev --extra video
 source .venv/bin/activate
+python scripts/setup_video_tools.py
+python scripts/download_splits.py
+python scripts/download_csd.py
+python -m mosei prepare-csd --source data/csd --output data/prepared-csd \
+  --tools data/tools/video-tools.json --splits data/csd/splits.json
 python -m pytest -q
 ```
 
-Python 3.12 is pinned in `.python-version`, and `uv.lock` pins dependencies. CUDA is selected automatically when available; every training/evaluation command also accepts `--device cpu`. A Python environment without uv can install the package with `python -m pip install -e '.[dev]'`, though the uv lock is the reproducible setup.
+The selected [samarwarsi/cmu-mosei package, version 1](https://www.kaggle.com/datasets/samarwarsi/cmu-mosei/versions/1) contains timestamped features and annotations, not original videos. We use timestamped words, sentiment labels, COVAREP and OpenFace 2 (28,365,272,301 bytes). The complete seven-file package is about 31.6 GB; GloVe, phones and FACET are not model inputs. The downloader validates pinned file sizes, resumes chunks and records locally calculated SHA-256 hashes. Those hashes are not independently published source checksums.
 
-## Download and prepare CMU-MOSEI
+Official source-video folds come from a pinned CMU Multimodal SDK revision, parsed as literals without executing downloaded Python. Their source hash is verified before use. Preparation audits roots, feature columns, interval order, exclusions, missing streams and source-video overlap. Label segments retain their original IDs even when stored out of chronological order. Statistics are fitted on valid, eligible training tokens only; all other splits and uploads use those saved statistics.
 
-The downloader defaults to [this Kaggle mirror, version 1](https://www.kaggle.com/datasets/neffow/cmu-mosei/versions/1). It retrieves only `aligned_50.pkl` and verifies the [MMSA authors' published SHA-256](https://github.com/thuiar/MMSA#2-datasets):
+| Modality | Shared representation |
+|---|---|
+| Text | 768 frozen BERT-base-uncased dimensions; final wordpieces averaged per word |
+| Audio | 73 named COVAREP channels; mono 16 kHz input and 10 ms bins |
+| Vision | 40 OpenFace 2 channels: gaze angles, head rotations, AU intensities/presence; success and confidence ≥ 0.8 |
 
-```text
-45eccfb748a87c80ecab9bfac29582e7b1466bf6605ff29d3b338a75120bf791
-```
+The MATLAB-toolbox-dependent `creak` channel is omitted on both paths. Native COVAREP extraction uses pinned upstream algorithms and tested Octave compatibility adapters. Camera-dependent landmark coordinates and head translations are omitted from vision. Historical CSD extractor commits/settings are not published: matching names, units and processing conventions does **not** establish numerical identity or identical train/upload distributions. Automatic transcripts introduce another difference from the released words. These limitations belong in the report.
 
-```bash
-python scripts/download_features.py
-python -m mosei prepare --source data/raw/aligned_50.pkl --output data/prepared
-```
-
-The archive is about 4.7 GB. Preparation needs several GB of free RAM and another several GB of disk space; the prepared arrays are memory-mapped during training. Interrupted downloader chunks are retained and reused on rerun. `--source authors` selects the original public Google Drive file. No Kaggle credentials are needed for this public mirror when its download endpoint is available.
-
-Preparation verifies the checksum **before loading the pickle**. It preserves released partitions, excludes neutral clips, audits all IDs (including excluded rows), rejects video overlap, and validates feature dimensions and masks. It fits each feature's mean and standard deviation using finite, valid, eligible training tokens only. Non-finite feature values are counted and imputed with the training mean; normalized padding is exactly zero. A constant feature uses scale 1.
-
-`data/prepared/audit.json` records the source hash, masks, original/eligible counts, class balance, non-finite counts and schema; `normalization.json` holds the fitted statistics. Never use a model-dependent subset as the primary test set. A manually supplied `--sha256` is for a separately trusted archive; the default verifies the exact proposed release.
-
-Cached text has width 768, audio 74 and vision 35. The release documents BERT text features. Audio and visual extractor provenance must be cited from the originating release/metadata, rather than inferred solely from these dimensions. This code starts from cached sequences; it does not run raw-media encoders.
+Overlap-weighted alignment produces word-level streams. All windows are retained (at most 50 words and 512 BERT tokens each). The duration-weighted mean of window logits is computed **before clip loss and softmax**, so every original clip contributes one label and one evaluation record. Cache version 2 stores offsets, masks, durations and fingerprints for this protocol.
 
 ## Train the models
 
 ```bash
-python -m mosei train --data data/prepared --config configs/text.toml --output runs/text-seed1111
-python -m mosei train --data data/prepared --config configs/concat.toml --output runs/concat-seed1111
-python -m mosei train --data data/prepared --config configs/transformer.toml --output runs/transformer-seed1111
+python -m mosei train --data data/prepared-csd --config configs/text.toml --output runs/text-seed1111
+python -m mosei train --data data/prepared-csd --config configs/concat.toml --output runs/concat-seed1111
+python -m mosei train --data data/prepared-csd --config configs/transformer.toml --output runs/transformer-seed1111
 ```
 
 | Config | Model |
@@ -59,7 +93,7 @@ python -m mosei train --data data/prepared --config configs/transformer.toml --o
 
 The Transformer starts with width 256, 2 layers, 4 heads, feed-forward width 512 and dropout 0.1. Positions restart within each aligned stream. They preserve the release's token order; equal embedding widths alone do not create temporal alignment. Each Transformer layer is initialized independently.
 
-All models use cross-entropy, AdamW, gradient clipping and identical default training budgets: learning rate 0.0003, batch size 32, at most 30 epochs, patience 6. The saved checkpoint maximizes **validation macro F1**, breaking ties with lower validation cross-entropy. Predictions use argmax. Run directories must be new, protecting previous experiment results.
+All models use cross-entropy, AdamW, gradient clipping and identical default training budgets: learning rate 0.0003, batch size 32, at most 30 epochs, patience 6. The saved checkpoint maximizes **validation macro F1**, breaking ties with lower validation cross-entropy. Predictions use argmax. Run directories must be new unless `--resume` is supplied. Resume restores the last completed epoch, optimizer, loader and random-number states; changed configurations or data are rejected.
 
 `--seed 1112`, `--epochs 1` and `--device cpu` override individual training settings. A one-epoch run checks execution; it does not establish the hypotheses. Record validation-based tuning choices and give each model the same tuning budget before freezing the final configurations. Parameter counts and training time are reported so capacity differences remain visible.
 
@@ -67,22 +101,22 @@ All models use cross-entropy, AdamW, gradient clipping and identical default tra
 
 ```bash
 # Nine core runs: three models × seeds 1111, 1112, 1113.
-python scripts/run_experiments.py --data data/prepared --output runs/core-v1
+python scripts/run_experiments.py --data data/prepared-csd --output runs/core-v1
 
 # Eighteen runs: the core models plus all three planned ablations.
-python scripts/run_experiments.py --data data/prepared --include-ablations --output runs/full-v1
+python scripts/run_experiments.py --data data/prepared-csd --include-ablations --output runs/full-v1
 ```
 
-The runner saves a manifest before starting, completes training for every run, then evaluates the fixed checkpoints and builds the report. `--train-only` postpones held-out evaluation; `--configs` and `--seeds` choose an explicit matrix. The runner refuses an existing output directory. Each completed run remains usable if a later run fails; incomplete runs are not treated as completed experiments.
+The runner saves a manifest before starting, completes training for every run, then evaluates the fixed checkpoints and builds the report. `--train-only` postpones held-out evaluation; `--configs` and `--seeds` choose an explicit matrix. Use `--resume` to continue an existing frozen matrix. Interrupted evaluations and report exports are preserved before recomputation. Each completed run remains usable if a later run fails; incomplete runs are not treated as completed experiments.
 
 Run artifacts include `config.json`, `data_audit.json`, epoch-by-epoch `history.json`, `best.pt` and `run.json`. Checkpoints retain model configuration, normalization, source/data fingerprints, software versions, seed and validation selection. The inference CLI checks preprocessing compatibility before prediction.
 
 ## Evaluate and export evidence
 
 ```bash
-python -m mosei evaluate --data data/prepared --run runs/text-seed1111 --robustness
-python -m mosei evaluate --data data/prepared --run runs/concat-seed1111 --robustness
-python -m mosei evaluate --data data/prepared --run runs/transformer-seed1111 --robustness
+python -m mosei evaluate --data data/prepared-csd --run runs/text-seed1111 --robustness
+python -m mosei evaluate --data data/prepared-csd --run runs/concat-seed1111 --robustness
+python -m mosei evaluate --data data/prepared-csd --run runs/transformer-seed1111 --robustness
 python -m mosei report --runs runs/text-seed1111 runs/concat-seed1111 runs/transformer-seed1111 --output results/first-comparison
 ```
 
@@ -103,28 +137,28 @@ Each evaluation saves per-clip CSVs and `metrics.json` in `evaluation/test/` (or
 
 Pairing requires identical IDs, annotations, videos, protocols and seed sets. Bootstrap intervals measure variation over source videos conditional on fitted runs; the separate sample SD measures variation across training seeds. With only one seed, SD is explicitly unavailable. A negative `macro_f1_drop` means a corrupted condition happened to score higher than clean data.
 
-## Demonstrate a held-out clip
+## Earlier aligned-feature experiment
+
+The initial implementation used the separate MMSA `aligned_50.pkl` package (768/74/35 dimensions), whose [published hash](https://github.com/thuiar/MMSA#2-datasets) is verified before pickle loading. Its cached-example workflow is retained for reproducibility:
 
 ```bash
-python -m mosei demo --data data/prepared \
-  --run runs/transformer-seed1111 --baseline runs/text-seed1111 --index 0
+python scripts/download_features.py
+python -m mosei prepare --source data/raw/aligned_50.pkl --output data/prepared
+python -m mosei demo --data data/prepared --run runs/real-data-smoke-20261002/transformer-seed1111 --index 0
 ```
 
-Use `--clip-id='VIDEO_ID$_$CLIP_ID'` (the equals sign also supports IDs starting with a dash) to inspect an error-example ID. Output shows the transcript, annotation, sentiment probabilities and the text-only comparison. Probabilities are model outputs; the demo does not infer a person's true internal emotion. Cases of apparent sarcasm or disagreement remain qualitative observations because this dataset does not provide independent sentiment truth for each modality.
+See [original experiment evidence](docs/verification.md). Those cache/checkpoint files use another feature representation and cannot serve uploaded videos. Their tiny training timings do not measure the larger CSD preparation or full video pipeline.
 
 ## Project files
 
-```text
-src/mosei/       data preparation, models, training, evaluation, reporting, CLI
-configs/         three core configurations and three ablations
-scripts/         dataset download and complete experiment runner
-tests/           behavioral and end-to-end checks on labelled synthetic fixtures
-docs/            implementation plan, progress/evidence and contribution tracker
-data/            ignored raw archive and prepared arrays
-runs/            ignored checkpoints, predictions and experiment manifests
-results/         ignored report exports
-```
+- `src/mosei/`: data preparation, shared features, video extraction, models, training, evaluation and app.
+- `configs/`: three core classifiers, three ablations and the feature contract template.
+- `notebooks/`: Colab download and training handoff.
+- `scripts/` and `tools/video/`: reproducible downloads, native tool setup, source bundling and experiments.
+- `tests/`: behavioral tests, real media fixtures and interruption/recovery checks.
+- `docs/`: design, implementation decisions, evidence and `contributions.csv`.
+- `data/`, `runs/`, `results/`, `dist/`: ignored local datasets, checkpoints and deliverables.
 
-The original proposal remains in the course Assignment 3 `Plan` folder. Group members can record owned tasks, commits and experiments in `docs/contributions.csv`. The assignment report and presentation should use actual saved results, describe negative findings, and distinguish exploratory validation runs from the final held-out comparison.
+The proposal remains in the course Assignment 3 `Plan` folder; source code stays in Projects. Group members should record actual owned tasks, commits and experiments in `docs/contributions.csv`. Use saved research results for the final report and presentation.
 
 Method references: [CMU-MOSEI](https://aclanthology.org/P18-1208/), [MulT](https://aclanthology.org/P19-1656/), [modality robustness](https://aclanthology.org/2022.naacl-main.50/). This concatenated-sequence Transformer is an application implementation, not an exact reproduction of MulT.
