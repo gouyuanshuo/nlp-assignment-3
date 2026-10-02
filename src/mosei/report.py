@@ -108,9 +108,16 @@ def _export_figures(groups, output):
             [r["evaluation"]["metrics"]["clean"]["confusion_matrix"] for r in runs.values()], axis=0
         )
         fig, ax = plt.subplots(figsize=(4.5, 4))
-        ax.imshow(matrix, cmap="Blues")
+        heatmap = ax.imshow(matrix, cmap="Blues")
         for (i, j), value in np.ndenumerate(matrix):
-            ax.text(j, i, f"{value:.1f}", ha="center", va="center", color="black")
+            ax.text(
+                j,
+                i,
+                f"{value:.1f}",
+                ha="center",
+                va="center",
+                color="white" if heatmap.norm(value) > 0.5 else "black",
+            )
         ax.set(
             xticks=[0, 1],
             yticks=[0, 1],
@@ -118,7 +125,7 @@ def _export_figures(groups, output):
             yticklabels=["Negative", "Positive"],
             xlabel="Predicted",
             ylabel="Annotated",
-            title=f"{name}: mean counts across {len(runs)} seed(s)",
+            title=f"{name}\nMean counts across {len(runs)} seed(s)",
         )
         fig.tight_layout()
         fig.savefig(output / f"{name}_confusion.png", dpi=180)
