@@ -1,6 +1,7 @@
 """Checkpoint-bound inference from a new local video, with disposable intermediates."""
 
 import importlib.metadata
+import shutil
 import tempfile
 import time
 from pathlib import Path
@@ -126,6 +127,11 @@ class VideoClassifier:
         info = probe_video(video)
         with tempfile.TemporaryDirectory(prefix="mosei-video-", dir=self.temp_root) as temporary:
             workdir = Path(temporary)
+            # Gradio's preview cache can expire while CPU feature extraction runs.
+            # Own the input for the entire request, alongside its other intermediates.
+            local_video = workdir / ("input" + Path(video).suffix.lower())
+            shutil.copyfile(video, local_video)
+            video = local_video
             notify(0.05, "Reading audio")
             audio_file = extract_audio(video, workdir / "audio.wav")
             notify(0.15, "Recognizing speech")

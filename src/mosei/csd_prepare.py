@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 
 from .csd import CSDStream
-from .data import LABEL_RULE, MODALITIES, SPLITS, _moments
+from .data import LABEL_RULE, MODALITIES, SPLITS, _moments, window_cache_files
 from .io import fingerprint, read_json, sha256_file, write_json
 from .video_features import TimedFeatures, Word, normalize_features, prepare_windows
 
@@ -241,8 +241,11 @@ def prepare_csd(
                 "normalization": "finite valid non-neutral training tokens only; nonfinite imputed with training mean",
                 "window_aggregation": "duration-weighted mean logits before loss/softmax",
             }
-            audit["fingerprint"] = fingerprint({"audit": audit, "normalization": normalization})
             write_json(staging / "normalization.json", normalization)
+            audit["content_sha256"] = {
+                name: sha256_file(staging / name) for name in window_cache_files()
+            }
+            audit["fingerprint"] = fingerprint({"audit": audit, "normalization": normalization})
             write_json(staging / "audit.json", audit)
             staging.rename(output)
         except BaseException:

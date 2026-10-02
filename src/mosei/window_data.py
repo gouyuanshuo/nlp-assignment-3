@@ -15,6 +15,15 @@ class WindowDataset(FeatureDataset):
     intervals: np.ndarray
 
     def __post_init__(self):
+        if (
+            self.labels.shape != (len(self),)
+            or self.labels.dtype.kind not in "iu"
+            or self.scores.shape != (len(self),)
+            or not np.isfinite(self.scores).all()
+            or np.any(self.scores == 0)
+            or not np.array_equal(self.labels, (self.scores > 0).astype(np.int64))
+        ):
+            raise ValueError("Clip labels must follow the non-neutral sentiment scores")
         n = len(self.durations)
         if (
             self.offsets.shape != (len(self) + 1,)

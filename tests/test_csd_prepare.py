@@ -107,3 +107,86 @@ def test_unknown_column_order_fails_before_encoding(tmp_path, csd_source):
     write_json(manifest, payload)
     with pytest.raises(ValueError, match="column"):
         prepare_csd(source, tmp_path / "cache", manifest, splits, encoder=None)
+
+
+@pytest.mark.parametrize("filename", ["labels.npy", "text.npy", "clips.json"])
+def test_prepared_cache_rejects_modified_training_content(tmp_path, csd_source, filename):
+    source, manifest, splits = csd_source
+    cache = tmp_path / "cache"
+    prepare_csd(source, cache, manifest, splits, encoder=TinyEncoder())
+    path = cache / "train" / filename
+    if path.suffix == ".json":
+        clips = json.loads(path.read_text())
+        clips["raw_text"][0] = "changed training transcript"
+        write_json(path, clips)
+    else:
+        values = np.load(path)
+        values.flat[0] = 1 if filename == "labels.npy" else 123
+        np.save(path, values, allow_pickle=False)
+    with pytest.raises(ValueError, match="checksum|content"):
+        load_data(cache)
+
+
+def test_colab_cache_recovers_partial_extraction_and_publication(tmp_path, csd_source, monkeypatch):
+    import shutil
+
+    from mosei.colab_cache import persist_cache, restore_cache
+
+    source, manifest, splits = csd_source
+    original = tmp_path / "original" / "prepared-csd"
+    prepare_csd(source, original, manifest, splits, encoder=TinyEncoder())
+    archive = tmp_path / "drive" / "prepared.tar"
+    persist_cache(original, archive)
+    cache = tmp_path / "runtime" / "prepared-csd"
+    cache.mkdir(parents=True)
+    shutil.copy2(original / "audit.json", cache / "audit.json")
+    assert restore_cache(cache, archive)
+    assert load_data(cache).fingerprint == load_data(original).fingerprint
+    assert list(cache.parent.glob("prepared-csd-interrupted-*"))
+    # A local cache must still be persisted on rerun after Drive publication failed.
+    archive.unlink()
+    archive.with_suffix(".tar.json").unlink()
+    actual_replace = type(archive).replace
+
+    def disconnect(path, destination):
+        if str(destination).endswith(".tar.json"):
+            raise OSError("simulated publication disconnect")
+        return actual_replace(path, destination)
+
+    monkeypatch.setattr(type(archive), "replace", disconnect)
+    with pytest.raises(OSError, match="disconnect"):
+        persist_cache(cache, archive)
+    monkeypatch.setattr(type(archive), "replace", actual_replace)
+    assert restore_cache(cache, archive)
+    persist_cache(cache, archive)
+    fresh = tmp_path / "fresh" / "prepared-csd"
+    assert restore_cache(fresh, archive)
+    assert load_data(fresh).fingerprint == load_data(original).fingerprint
+
+
+def test_colab_extraction_becomes_visible_only_after_complete_validation(
+    tmp_path, csd_source, monkeypatch
+):
+    import tarfile
+
+    from mosei.colab_cache import persist_cache, restore_cache
+
+    source, manifest, splits = csd_source
+    original = tmp_path / "original"
+    prepare_csd(source, original, manifest, splits, encoder=TinyEncoder())
+    archive = tmp_path / "drive" / "prepared.tar"
+    persist_cache(original, archive)
+    extract = tarfile.TarFile.extractall
+
+    def partial(tar, path, **kwargs):
+        tar.extract("prepared-csd/audit.json", path=path, filter="data")
+        raise RuntimeError("simulated extraction disconnect")
+
+    monkeypatch.setattr(tarfile.TarFile, "extractall", partial)
+    cache = tmp_path / "runtime" / "prepared-csd"
+    with pytest.raises(RuntimeError, match="disconnect"):
+        restore_cache(cache, archive)
+    assert not cache.exists()
+    monkeypatch.setattr(tarfile.TarFile, "extractall", extract)
+    assert restore_cache(cache, archive)
+    assert load_data(cache).fingerprint == load_data(original).fingerprint

@@ -64,3 +64,36 @@ def test_resume_rejects_changed_configuration(tmp_path, feature_file):
     changed = replace(config, training=replace(config.training, seed=7))
     with pytest.raises(ValueError, match="configuration|config"):
         train_run(data, changed, tmp_path / "run", resume=True)
+
+
+def test_best_checkpoint_matches_committed_epoch_after_retry_drift(
+    tmp_path, feature_file, monkeypatch
+):
+    import mosei.train as trainer
+
+    source, sha = feature_file
+    prepare_data(source, tmp_path / "data", sha, expected_dims=None)
+    data = load_data(tmp_path / "data")
+    config = ExperimentConfig(
+        model=ModelConfig(name="text", hidden_dim=8),
+        training=TrainingConfig(epochs=2, patience=3, batch_size=2, device="cpu"),
+    )
+    losses = iter([0.2, 0.1999999, 0.2000001])
+    monkeypatch.setattr(
+        trainer, "classification_metrics", lambda _: {"macro_f1": 0.5, "loss": next(losses)}
+    )
+    save = trainer._save_checkpoint
+
+    def interrupted(path, value):
+        if path.name == "last.pt" and value["epoch"] == 2:
+            raise RuntimeError("disconnect before epoch commit")
+        return save(path, value)
+
+    monkeypatch.setattr(trainer, "_save_checkpoint", interrupted)
+    with pytest.raises(RuntimeError, match="disconnect"):
+        train_run(data, config, tmp_path / "run")
+    monkeypatch.setattr(trainer, "_save_checkpoint", save)
+    result = train_run(data, config, tmp_path / "run", resume=True)
+    _, checkpoint = restore_run(tmp_path / "run")
+    assert result["best_epoch"] == checkpoint["best_epoch"] == 1
+    assert result["best_validation"] == checkpoint["best_validation"]

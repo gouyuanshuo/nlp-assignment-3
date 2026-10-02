@@ -1,5 +1,3 @@
-from pathlib import Path
-
 import numpy as np
 import pytest
 import torch
@@ -46,6 +44,8 @@ def test_failed_extraction_cleans_work_directory(tmp_path, monkeypatch):
     classifier.manifest = {"audio": {}, "vision": {}}
     classifier.speech = object()
     classifier.temp_root = tmp_path
+    upload = tmp_path / "upload.mp4"
+    upload.write_bytes(b"uploaded media fixture")
     created = []
     monkeypatch.setattr(pipeline, "probe_video", lambda p: None)
 
@@ -56,9 +56,9 @@ def test_failed_extraction_cleans_work_directory(tmp_path, monkeypatch):
 
     monkeypatch.setattr(pipeline, "extract_audio", extract)
     with pytest.raises(ValueError, match="broken"):
-        classifier.classify(Path("unused.mp4"))
+        classifier.classify(upload)
     assert created and not created[0].exists()
-    assert list(tmp_path.iterdir()) == []
+    assert list(tmp_path.iterdir()) == [upload]
 
 
 def test_failed_readiness_check_blocks_model_loading(tmp_path):
@@ -70,3 +70,36 @@ def test_failed_readiness_check_blocks_model_loading(tmp_path):
     )
     with pytest.raises(ValueError, match="fingerprint"):
         VideoClassifier(tmp_path / "missing-checkpoint", tmp_path / "tools.json")
+
+
+def test_active_analysis_survives_preview_cache_expiry(tmp_path, monkeypatch):
+    import mosei.video_pipeline as pipeline
+    from mosei.video_features import Word
+
+    upload = tmp_path / "upload.mp4"
+    upload.write_bytes(b"original uploaded video")
+    work = tmp_path / "analysis"
+    work.mkdir()
+    classifier = object.__new__(VideoClassifier)
+    classifier.manifest = {"audio": {}, "vision": {}}
+    classifier.speech = object()
+    classifier.temp_root = work
+    monkeypatch.setattr(pipeline, "probe_video", lambda _: None)
+    monkeypatch.setattr(pipeline, "extract_audio", lambda video, output: output)
+
+    def expire_preview(*args):
+        upload.unlink()
+        return [Word("speech", 0, 1)]
+
+    monkeypatch.setattr(pipeline, "transcribe_audio", expire_preview)
+    monkeypatch.setattr(pipeline, "extract_covarep", lambda *args: None)
+
+    def read_face_input(video, folder, manifest):
+        assert video.read_bytes() == b"original uploaded video"
+        assert video.parent == folder
+        raise ValueError("face stage received intact video")
+
+    monkeypatch.setattr(pipeline, "extract_openface", read_face_input)
+    with pytest.raises(ValueError, match="face stage received intact video"):
+        classifier.classify(upload)
+    assert not list(work.iterdir())

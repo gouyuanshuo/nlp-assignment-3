@@ -128,6 +128,10 @@ def train_run(data: PreparedData, config: ExperimentConfig, output: Path, *, res
             return read_json(output / "run.json")
         if (output / "last.pt").is_file():
             state = torch.load(output / "last.pt", map_location="cpu", weights_only=True)
+            if "best_checkpoint" not in state:
+                raise ValueError(
+                    "Resume checkpoint predates atomic best-state recovery; start a new run"
+                )
             if (
                 state["metadata"]["config"] != asdict(config)
                 or state["metadata"]["data_fingerprint"] != data.fingerprint
@@ -188,6 +192,7 @@ def train_run(data: PreparedData, config: ExperimentConfig, output: Path, *, res
     completed, elapsed_before = 0, 0.0
     started = time.perf_counter()
     best_epoch = 0
+    best_checkpoint = None
     if state is not None:
         model.load_state_dict(state["state_dict"], strict=True)
         optimizer.load_state_dict(state["optimizer"])
@@ -195,6 +200,11 @@ def train_run(data: PreparedData, config: ExperimentConfig, output: Path, *, res
             state[k] for k in ("history", "best", "best_epoch", "stale")
         )
         completed, elapsed_before = state["epoch"], state["elapsed_seconds"]
+        best_checkpoint = state["best_checkpoint"]
+        # last.pt commits current and best weights together. Repair an export
+        # left behind by an interruption on either side of the epoch commit.
+        _save_checkpoint(output / "best.pt", best_checkpoint)
+        write_json(output / "history.json", history)
         generator.set_state(state["rng"]["loader"])
         torch.set_rng_state(state["rng"]["torch"])
         if device == "cuda" and state["rng"]["cuda"]:
@@ -246,17 +256,17 @@ def train_run(data: PreparedData, config: ExperimentConfig, output: Path, *, res
             f"val_macro_f1={validation['macro_f1']:.4f} val_loss={validation['loss']:.4f}",
             flush=True,
         )
-        if is_better(validation, best):
+        improved = is_better(validation, best)
+        if improved:
             best, best_epoch, stale = validation, epoch, 0
-            checkpoint = {
-                "state_dict": model.state_dict(),
+            best_checkpoint = {
+                "state_dict": {k: v.detach().cpu().clone() for k, v in model.state_dict().items()},
                 "metadata": {
                     **metadata,
                     "best_epoch": best_epoch,
                     "best_validation": best,
                 },
             }
-            _save_checkpoint(output / "best.pt", checkpoint)
         else:
             stale += 1
         numpy_rng = np.random.get_state()
@@ -270,6 +280,7 @@ def train_run(data: PreparedData, config: ExperimentConfig, output: Path, *, res
                 "history": history,
                 "best": best,
                 "best_epoch": best_epoch,
+                "best_checkpoint": best_checkpoint,
                 "stale": stale,
                 "elapsed_seconds": elapsed_before + time.perf_counter() - started,
                 "rng": {
@@ -281,6 +292,8 @@ def train_run(data: PreparedData, config: ExperimentConfig, output: Path, *, res
                 },
             },
         )
+        if improved:
+            _save_checkpoint(output / "best.pt", best_checkpoint)
         if stale >= settings.patience:
             break
     result = {

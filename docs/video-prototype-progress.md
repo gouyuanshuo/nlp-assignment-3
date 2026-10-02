@@ -21,3 +21,15 @@ Approved design: `docs/superpowers/specs/2026-10-03-video-upload-prototype-desig
 Historical extractor settings are not fully documented by the CSD release. Schema, feature families, units, masks and alignment are verified; numerical identity to historical features is not claimed. The report must distinguish released-transcript benchmark performance from automatic-transcript uploads.
 
 See [execution evidence](video-prototype-verification.md) and [Colab instructions](../README.md).
+
+Independent review completed with three important findings fixed in one test-led
+pass: cache transfer recovery, prepared-file integrity and epoch/best-checkpoint
+consistency. Final suite: 107 passed; Ruff passed. No deferred minor findings.
+The updated integration run is `runs/video-integration-v2/transformer-seed1111`.
+
+The final real-upload repeat exposed a preview-cache expiry race. Each request
+now owns its input copy until completion; regression and full-suite checks pass.
+
+Final actual upload and silent-error repeat passed after the lifetime fix
+(15-second clip: 88.2 seconds). The localhost app is running with the refreshed
+integration checkpoint. Full Colab research training remains pending.

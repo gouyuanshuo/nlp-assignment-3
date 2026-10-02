@@ -34,9 +34,9 @@ cd /home/gys/Projects/nlp-assignment-3
 .venv/bin/python -m mosei serve --run runs/colab/selected-run --tools data/tools/video-tools.json
 ```
 
-Open **http://127.0.0.1:7860**. Upload an English MP4, MOV or WebM, up to 60 seconds and 200 MB, with one visible speaker. The app shows a preview, processing progress, transcript, positive/negative probabilities and predictions for each speech window. Silent input, insufficient face/voice coverage and incompatible checkpoints produce errors with cleared results. Processing stays local; per-request intermediates are deleted and the preview cache expires shortly afterward.
+Open **http://127.0.0.1:7860**. Upload an English MP4, MOV or WebM, up to 60 seconds and 200 MB, with one visible speaker. The app shows a preview, processing progress, transcript, positive/negative probabilities and predictions for each speech window. Silent input, insufficient face/voice coverage and incompatible checkpoints produce errors with cleared results. Processing stays local; each analysis owns a temporary copy until completion, and the preview cache expires within about an hour.
 
-For a local pipeline demonstration before full training, replace the run path with `runs/video-integration/transformer-seed1111`. This tiny model is explicitly marked as an integration checkpoint. It is **not suitable for accuracy claims**. New uploads were exercised through the real Gradio API; visual browser review is still pending because no browser was connected to the coding session.
+For a local pipeline demonstration before full training, replace the run path with `runs/video-integration-v2/transformer-seed1111`. This tiny model is explicitly marked as an integration checkpoint. It is **not suitable for accuracy claims**. New uploads were exercised through the real Gradio API; visual browser review is still pending because no browser was connected to the coding session.
 
 A command-line upload is also available:
 
@@ -72,7 +72,7 @@ Official source-video folds come from a pinned CMU Multimodal SDK revision, pars
 
 The MATLAB-toolbox-dependent `creak` channel is omitted on both paths. Native COVAREP extraction uses pinned upstream algorithms and tested Octave compatibility adapters. Camera-dependent landmark coordinates and head translations are omitted from vision. Historical CSD extractor commits/settings are not published: matching names, units and processing conventions does **not** establish numerical identity or identical train/upload distributions. Automatic transcripts introduce another difference from the released words. These limitations belong in the report.
 
-Overlap-weighted alignment produces word-level streams. All windows are retained (at most 50 words and 512 BERT tokens each). The duration-weighted mean of window logits is computed **before clip loss and softmax**, so every original clip contributes one label and one evaluation record. Cache version 2 stores offsets, masks, durations and fingerprints for this protocol.
+Overlap-weighted alignment produces word-level streams. All windows are retained (at most 50 words and 512 BERT tokens each). The duration-weighted mean of window logits is computed **before clip loss and softmax**, so every original clip contributes one label and one evaluation record. Cache version 2 stores offsets, masks, durations and fingerprints for this protocol. Every prepared array and clip-metadata file is hashed and verified before reuse; labels are checked against preserved sentiment scores. Interrupted cache extraction is staged before an atomic rename. Incomplete Drive publication is retried even when the local cache already exists.
 
 ## Train the models
 
@@ -108,6 +108,8 @@ python scripts/run_experiments.py --data data/prepared-csd --include-ablations -
 ```
 
 The runner saves a manifest before starting, completes training for every run, then evaluates the fixed checkpoints and builds the report. `--train-only` postpones held-out evaluation; `--configs` and `--seeds` choose an explicit matrix. Use `--resume` to continue an existing frozen matrix. Interrupted evaluations and report exports are preserved before recomputation. Each completed run remains usable if a later run fails; incomplete runs are not treated as completed experiments.
+
+The committed `last.pt` contains current weights, optimizer/RNG state and the best weights/metrics together. Resume repairs `best.pt` from that committed state before continuing.
 
 Run artifacts include `config.json`, `data_audit.json`, epoch-by-epoch `history.json`, `best.pt` and `run.json`. Checkpoints retain model configuration, normalization, source/data fingerprints, software versions, seed and validation selection. The inference CLI checks preprocessing compatibility before prediction.
 

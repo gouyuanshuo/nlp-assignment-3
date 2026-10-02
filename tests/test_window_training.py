@@ -82,3 +82,8 @@ def test_multiwindow_train_reload_preserves_manifest(tmp_path, name):
 def test_invalid_clip_offsets_cannot_drop_windows():
     with pytest.raises(ValueError, match="offsets"):
         replace(dataset(), offsets=np.array([0, 1, 2]))
+
+
+def test_clip_labels_must_follow_preserved_sentiment_scores():
+    with pytest.raises(ValueError, match="label|sentiment"):
+        replace(dataset(), labels=np.array([1, 1]))

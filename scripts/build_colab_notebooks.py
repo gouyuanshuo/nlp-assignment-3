@@ -135,29 +135,12 @@ def build():
         print('Pinned BERT snapshot ready. The feature manifest itself is unchanged.')
         """),
         code("""
-        import tarfile
+        from mosei.colab_cache import persist_cache, restore_cache
+        from mosei.data import load_data
+
         cache = Path('/content/prepared-csd')
         cache_archive = STORE / ('prepared-' + tools['fingerprint'][:16] + '.tar')
-        archive_hash = cache_archive.with_suffix('.tar.sha256')
-
-        def file_hash(path):
-            digest = hashlib.sha256()
-            with Path(path).open('rb') as stream:
-                for chunk in iter(lambda: stream.read(8 * 1024 * 1024), b''):
-                    digest.update(chunk)
-            return digest.hexdigest()
-
-        if cache.is_dir():
-            print('Using the current runtime cache; its audit will be verified below.')
-        elif cache_archive.is_file() and archive_hash.is_file():
-            local_archive = Path('/content/prepared.tar')
-            shutil.copy2(cache_archive, local_archive)
-            if file_hash(local_archive) != archive_hash.read_text().strip():
-                raise ValueError('Prepared archive checksum mismatch')
-            with tarfile.open(local_archive) as archive:
-                archive.extractall('/content', filter='data')
-            local_archive.unlink()
-        else:
+        if not restore_cache(cache, cache_archive):
             if shutil.disk_usage('/content').free < 55_000_000_000:
                 raise RuntimeError('Allow at least 55 GB of free runtime disk for source and staging files.')
             source = Path('/content/csd')
@@ -173,18 +156,13 @@ def build():
             subprocess.run([sys.executable, '-m', 'mosei', 'prepare-csd', '--source', str(source),
                             '--output', str(cache), '--tools', 'data/tools/video-tools.json',
                             '--splits', 'data/csd/splits.json', '--device', 'cuda'], check=True)
-            local_archive = Path('/content/prepared.tar')
-            with tarfile.open(local_archive, 'w') as archive:
-                archive.add(cache, arcname='prepared-csd')
-            digest = file_hash(local_archive)
-            shutil.copy2(local_archive, cache_archive)
-            archive_hash.write_text(digest + '\\n')
-            local_archive.unlink()
-        audit = json.loads((cache / 'audit.json').read_text())
+        audit = load_data(cache).audit  # Verify every array and clip metadata file before reuse.
         if audit['feature_manifest'] != tools['manifest']:
             raise ValueError('Cache does not match this source bundle; use a fresh runtime.')
         if audit['smoke_max_clips_per_split'] is not None or 'smoke' in audit['folds_source'].get('purpose', '').lower():
             raise ValueError('Full experiments require the complete source folds, not an integration subset.')
+        # Always finish publishing, even if an earlier session prepared the local cache.
+        persist_cache(cache, cache_archive)
         RUNS = STORE / ('runs-csd-' + audit['fingerprint'][:16])
         print({s: audit['splits'][s]['eligible_count'] for s in ('train', 'valid', 'test')})
         print('Checkpoints will be saved to:', RUNS)

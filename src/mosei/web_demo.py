@@ -45,7 +45,7 @@ def build_demo(classifier):
     with gr.Blocks(
         title="Video Sentiment · NLP Assignment 3",
         theme=gr.themes.Soft(primary_hue="teal"),
-        delete_cache=(60, 60),
+        delete_cache=(60, 3600),
     ) as demo:
         gr.Markdown(
             "# Video sentiment\nSee how speech, voice and facial expression combine into a sentiment prediction."
@@ -68,7 +68,7 @@ def build_demo(classifier):
             interactive=False,
         )
         gr.Markdown(
-            "Processed on this computer. Temporary analysis files are removed after each request; the upload preview cache expires shortly afterward."
+            "Processed on this computer. Temporary analysis files are removed after each request; the upload preview is automatically deleted within about an hour."
         )
         outputs = [status, probabilities, transcript, windows]
 

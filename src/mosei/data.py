@@ -276,6 +276,26 @@ def prepare_data(
     return audit
 
 
+def window_cache_files() -> list[str]:
+    arrays = [
+        *MODALITIES,
+        *(m + "_mask" for m in MODALITIES),
+        "labels",
+        "scores",
+        "offsets",
+        "durations",
+        "intervals",
+    ]
+    return [
+        "normalization.json",
+        *(
+            f"{split}/{name}"
+            for split in SPLITS
+            for name in ["clips.json", *(f"{array}.npy" for array in arrays)]
+        ),
+    ]
+
+
 def load_data(directory: Path) -> PreparedData:
     directory = Path(directory)
     audit = read_json(directory / "audit.json")
@@ -286,6 +306,14 @@ def load_data(directory: Path) -> PreparedData:
     saved_fingerprint = check.pop("fingerprint")
     if fingerprint({"audit": check, "normalization": normalization}) != saved_fingerprint:
         raise ValueError("Prepared metadata fingerprint mismatch")
+    if audit["cache_version"] == 2:
+        hashes = audit.get("content_sha256", {})
+        if not isinstance(hashes, dict) or set(hashes) != set(window_cache_files()):
+            raise ValueError("Prepared content manifest is incomplete; prepare the CSD cache again")
+        for name, expected in hashes.items():
+            path = directory / name
+            if not path.is_file() or sha256_file(path) != expected:
+                raise ValueError(f"Prepared content checksum mismatch or missing file: {name}")
     splits = {}
     for split in SPLITS:
         folder = directory / split
