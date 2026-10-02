@@ -11,7 +11,7 @@ three integration models. All nine rendered proposal pages were visually inspect
 the final document edit.
 
 - Real CSD reader validated 23,259 label rows and 1,084,005 timestamped word rows. Official SDK video-fold lists contain 2,249 training, 300 validation and 678 test video IDs; these list lengths are not final eligible clip counts.
-- Full source download selects timestamped words, labels, COVAREP and OpenFace 2 from `samarwarsi/cmu-mosei`, version 1: 28,365,272,301 bytes. Large audio/vision transfers are still in progress at this checkpoint. Sizes come from the pinned catalog; saved SHA-256 values are calculated locally.
+- Full source download selects timestamped words, labels, COVAREP and OpenFace 2 from `samarwarsi/cmu-mosei`, version 1: 28,365,272,301 bytes. All four transfers completed; each assembled file has its size/hash record and opens as the expected CSD stream. Acoustic/visual source column hashes match the feature manifest. Sizes come from the pinned catalog; saved SHA-256 values are calculated locally.
 - A separate nine-video subset (three videos from each official fold) was downloaded and prepared for integration only. After exact-neutral exclusions, it contains 25/8/13 train/validation/test clips and 25/9/13 windows. Training class counts are 8 negative and 17 positive. All three model families trained for one epoch and restored successfully.
 - Every clip contributes one label, irrespective of window count. Tests cover duration-weighted logits, gradients through all windows, stable corruption, training-only normalization, held-out source-video separation and old/new cache compatibility.
 - A simulated disconnect during training followed by resume produced exactly the same CPU model weights and losses as uninterrupted training on the test fixture. Resume refuses changed data/configuration. A separate interrupted-report test confirms incomplete exports are preserved and rebuilt.
@@ -55,7 +55,7 @@ The two notebooks and small `dist/mosei-colab-source.zip` are prepared. All note
 
 Pending acceptance items:
 
-- Finish the full selected CSD download and prepare the complete research folds.
+- Prepare the complete research folds from the downloaded CSD streams in the Colab workflow.
 - Execute and validate the notebooks in the user's authenticated Colab runtime.
 - Train the frozen core models and ablations across three seeds, evaluate fixed checkpoints and generate the report. No final performance or full-training-time claim exists yet.
 - Export the validation-selected compatible Transformer and test it with fresh labelled English clips.
@@ -99,3 +99,9 @@ The following silent upload again cleared every result field. Final response
 records are `data/video-smoke/final-web-api-result.json` and
 `final-web-api-silent-result.json`. The source ZIP contains 42 entries with
 verified hashes and a clean ZIP integrity check.
+
+Completed source inventory: 3,837 word-stream videos, 3,293 label-stream videos,
+3,836 acoustic-stream videos and 3,837 visual-stream videos. These are source
+container inventories; official-fold membership, missing streams and neutral
+exclusions determine the final prepared research counts. The downloader exited
+successfully after assembling the final visual file.

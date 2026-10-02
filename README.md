@@ -2,7 +2,7 @@
 
 Upload an English video, extract text, voice and facial features, and classify its sentiment with a compact multimodal Transformer. Text-only and pooled-concatenation baselines use the same prepared data and training protocol.
 
-**Current status:** the real video pipeline and local upload API work with a small integration checkpoint. Full research training is prepared for **Google Colab** and has not been run there yet. The initial real upload took 121.4 seconds for a 15-second clip; a subsequent API upload took 98.1 seconds. These are extraction/inference measurements, not model-training times. See [verification evidence](docs/video-prototype-verification.md).
+**Current status:** the real video pipeline and local upload API work with a small integration checkpoint. The four selected CSD streams (28.4 GB) are downloaded in local `data/csd/`. Full research training is prepared for **Google Colab** and has not been run there yet. The initial real upload took 121.4 seconds for a 15-second clip; a subsequent API upload took 98.1 seconds. These are extraction/inference measurements, not model-training times. See [verification evidence](docs/video-prototype-verification.md).
 
 **Task:** negative (`y < 0`) versus positive (`y > 0`). Exactly neutral clips are excluded. The model has no neutral class, and its softmax probabilities are not calibrated measures of a person's internal emotion.
 

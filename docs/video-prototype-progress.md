@@ -3,7 +3,7 @@
 Plan: `docs/superpowers/plans/2026-10-03-video-upload-prototype.md`.
 Approved design: `docs/superpowers/specs/2026-10-03-video-upload-prototype-design.md`.
 
-- Task 1: complete implementation and extractor checks; full selected CSD download is still running. Reader/schema tests and all real label/word rows pass; native tools processed a spoken clip.
+- Task 1: complete — all four selected CSD files downloaded (28,365,272,301 bytes), with recorded local checksums and readable schemas. Reader/schema tests and all real label/word rows pass; native tools processed a spoken clip.
 - Task 2: complete — shared alignment, masks, windows, BERT and normalization. All windows are retained.
 - Task 3: complete implementation — CSD cache and clip-level training tested; all three models trained and restored on a small real integration subset. Full-fold research runs remain pending.
 - Task 4: complete implementation and real extraction/inference check — English speech, voice and face features reach the trained integration checkpoint.
