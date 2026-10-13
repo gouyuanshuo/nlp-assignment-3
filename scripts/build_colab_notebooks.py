@@ -23,7 +23,26 @@ def code(text):
     }
 
 
-EXTRACT = """
+POST_INSTALL = """
+# Editable-install .pth files are not discovered again by a running notebook kernel.
+sys.path.insert(0, str(PROJECT / 'src'))
+stale_packages = {}
+for distribution, expected in tools['manifest']['software'].items():
+    loaded = sys.modules.get(distribution.replace('-', '_'))
+    current = getattr(loaded, '__version__', None)
+    if current is not None and current != expected:
+        stale_packages[distribution] = {'loaded': current, 'installed': expected}
+if stale_packages:
+    raise RuntimeError(
+        'Restart the Colab session (Runtime > Restart session), then rerun the setup cells. '
+        'The kernel still holds packages from before installation: ' + str(stale_packages)
+    )
+print('Installed the source bundle and matching feature-library versions.')
+"""
+
+
+EXTRACT = (
+    """
 import hashlib, json, os, shutil, subprocess, sys, zipfile
 from pathlib import Path
 
@@ -44,8 +63,9 @@ os.environ.update(USE_TF='0', USE_FLAX='0', TOKENIZERS_PARALLELISM='false')
 tools = json.loads((PROJECT / 'data/tools/video-tools.json').read_text())
 versions = [f'{name}=={version}' for name, version in tools['manifest']['software'].items()]
 subprocess.run([sys.executable, '-m', 'pip', 'install', '-q', '-e', '.[video]', *versions], check=True)
-print('Installed the source bundle and matching feature-library versions.')
 """
+    + POST_INSTALL
+)
 
 
 def build():

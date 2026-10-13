@@ -2,7 +2,9 @@
 
 Upload an English video, extract text, voice and facial features, and classify its sentiment with a compact multimodal Transformer. Text-only and pooled-concatenation baselines use the same prepared data and training protocol.
 
-**Current status:** the real video pipeline and local upload API work with a small integration checkpoint. The four selected CSD streams (28.4 GB) are downloaded in local `data/csd/`. Full research training is prepared for **Google Colab** and has not been run there yet. The initial real upload took 121.4 seconds for a 15-second clip; a subsequent API upload took 98.1 seconds. These are extraction/inference measurements, not model-training times. See [verification evidence](docs/video-prototype-verification.md).
+**Current status (11 October 2026):** full CMU-MOSEI training and evaluation are complete: six configurations × three seeds, followed by 234 clean/corruption evaluations. The validation-selected Transformer is installed in `runs/colab/selected-run` and passed real spoken-video and silent-video API checks. A 15-second spoken upload took 82.7 seconds locally. The four selected CSD streams (28.4 GB) remain in `data/csd/`; the complete prepared cache, all runs and exports are saved in `MyDrive/NLP_Assignment_3`. See the [research results](results/colab-20261011/results.md) and [verification evidence](docs/video-prototype-verification.md).
+
+Mean test macro F1 across three seeds is **82.49% for text-only, 82.42% for concatenation and 82.66% for the Transformer**. The Transformer's small differences from both baselines have 95% source-video bootstrap intervals spanning zero; these experiments do not establish a clear improvement on clean data. Recorded training time across all 18 runs was 21.4 minutes on an A100, excluding preparation, evaluation and transfers. The complete Colab session used approximately 8.24 compute units based on the displayed balance change, and its runtime was stopped after export.
 
 **Task:** negative (`y < 0`) versus positive (`y > 0`). Exactly neutral clips are excluded. The model has no neutral class, and its softmax probabilities are not calibrated measures of a person's internal emotion.
 
@@ -16,7 +18,9 @@ All local code and data stay in `/home/gys/Projects/nlp-assignment-3`.
 4. Run the frozen training matrix. Each completed epoch is checkpointed to Drive. Rerunning the same cells resumes after a disconnect; a partial epoch repeats. The default is six configurations × three seeds; `INCLUDE_ABLATIONS = False` runs the three core models first, but use a new matrix directory if changing a matrix already started.
 5. Once modeling choices are fixed, evaluate held-out data and export the Transformer checkpoint selected by **validation** performance. Extract the exported `selected-run/` folder into local `runs/colab/`, then launch the demo below.
 
-The notebooks require enough Drive space for source, prepared arrays and runs, and at least 55 GB free runtime disk during initial preparation. They have been checked locally but not executed in an authenticated Colab session. The bundle contains source and pinned feature manifests, not datasets, weights or credentials. Build it again after an intentional source update:
+If setup asks for a restart after installing pinned packages, choose **Runtime → Restart session**, then rerun the setup cells. The notebook checks for older package versions still loaded in memory. Runtime files and the mounted Drive remain available after a kernel restart.
+
+The notebooks require enough Drive space for source, prepared arrays and runs, and at least 55 GB free runtime disk during initial preparation. Their preparation, timing, training and evaluation/export workflow was executed in the authenticated Colab runtime through CLI-adapted notebooks, preserved with outputs in `runs/colab-20261011/`. The browser upload/mount cells were replaced with the CLI's file transfer and Drive mount. The refreshed handoff notebooks also guard against stale packages in a running kernel; 110 local tests passed. The bundle contains source and pinned feature manifests, not datasets, weights or credentials. Build it again after an intentional source update:
 
 ```bash
 .venv/bin/python scripts/build_colab_bundle.py
@@ -26,7 +30,7 @@ Keep the local extractor bundle that produced the feature manifest. Changing fea
 
 ## Run the video prototype locally
 
-The existing checkout has the pinned extractors/models installed. After importing the Colab checkpoint:
+The existing checkout has the pinned extractors/models and the full-data Colab checkpoint installed:
 
 ```bash
 cd /home/gys/Projects/nlp-assignment-3
@@ -36,7 +40,7 @@ cd /home/gys/Projects/nlp-assignment-3
 
 Open **http://127.0.0.1:7860**. Upload an English MP4, MOV or WebM, up to 60 seconds and 200 MB, with one visible speaker. The app shows a preview, processing progress, transcript, positive/negative probabilities and predictions for each speech window. Silent input, insufficient face/voice coverage and incompatible checkpoints produce errors with cleared results. Processing stays local; each analysis owns a temporary copy until completion, and the preview cache expires within about an hour.
 
-For a local pipeline demonstration before full training, replace the run path with `runs/video-integration-v2/transformer-seed1111`. This tiny model is explicitly marked as an integration checkpoint. It is **not suitable for accuracy claims**. New uploads were exercised through the real Gradio API; visual browser review is still pending because no browser was connected to the coding session.
+The earlier tiny checkpoint in `runs/video-integration-v2/transformer-seed1111` is retained as historical integration evidence. Use `runs/colab/selected-run` for the current demo. The trained model passed a real Gradio video upload and a silent-video rejection check. Initial browser layout and missing-video handling were inspected; browser upload/playback and progress still need manual visual review because the browser tool could not access the Projects fixture path.
 
 A command-line upload is also available:
 

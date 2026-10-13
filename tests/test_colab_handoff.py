@@ -1,12 +1,49 @@
 import hashlib
+import importlib.machinery
 import io
 import json
 import runpy
 import sys
+from types import SimpleNamespace
 
 import pytest
 
 from mosei.data import prepare_data
+
+
+def test_notebook_exposes_new_source_to_the_running_kernel(tmp_path):
+    source = tmp_path / "src"
+    source.mkdir()
+    (source / "notebook_import_probe.py").write_text("ready = True\n")
+    kernel = SimpleNamespace(path=[], modules={})
+    namespace = {
+        "sys": kernel,
+        "PROJECT": tmp_path,
+        "tools": {"manifest": {"software": {}}},
+    }
+    setup = runpy.run_path("scripts/build_colab_notebooks.py")["POST_INSTALL"]
+    exec(setup, namespace)
+    found = importlib.machinery.PathFinder.find_spec("notebook_import_probe", kernel.path)
+    assert found is not None
+    assert found.origin == str(source / "notebook_import_probe.py")
+
+
+@pytest.mark.parametrize(
+    "distribution,module", [("numpy", "numpy"), ("faster-whisper", "faster_whisper")]
+)
+def test_notebook_requires_restart_for_stale_loaded_packages(tmp_path, distribution, module):
+    setup = runpy.run_path("scripts/build_colab_notebooks.py")["POST_INSTALL"]
+    kernel = SimpleNamespace(path=[], modules={module: SimpleNamespace(__version__="1.0")})
+    namespace = {
+        "sys": kernel,
+        "PROJECT": tmp_path,
+        "tools": {"manifest": {"software": {distribution: "2.0"}}},
+    }
+    with pytest.raises(RuntimeError, match="Restart") as error:
+        exec(setup, namespace)
+    assert distribution in str(error.value)
+    kernel.modules[module].__version__ = "2.0"
+    exec(setup, namespace)
 
 
 def test_sdk_download_verifies_bytes_before_writing_folds(tmp_path, monkeypatch):

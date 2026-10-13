@@ -1,10 +1,13 @@
 # CMU-MOSEI video upload prototype
 
-Status: approved by the user's "good" on 2026-10-03. The implementation now
-processes real uploads with an explicitly marked integration checkpoint. Full
-research training will use the user's confirmed Google Colab access (200 compute
-units; actual GPU and rate measured in-session). Full training and visual browser
-acceptance remain pending; see `docs/video-prototype-verification.md`.
+Status: approved by the user's "good" on 2026-10-03. Full research training and
+evaluation completed in Google Colab on 2026-10-11: six configurations across
+three seeds and 234 held-out evaluations. Real uploads now use the
+validation-selected full-data Transformer. Spoken/silent API checks and initial
+browser layout checks passed; browser upload/playback review and accuracy on
+fresh labelled videos remain follow-up work. See
+`docs/video-prototype-verification.md` for evidence and measured costs. The
+original design below is retained as the pre-experiment specification.
 
 Implementation decisions: 768 BERT dimensions, 73 COVAREP channels (MATLAB-only
 `creak` omitted on both paths), and 40 named OpenFace channels. Native tools and

@@ -1,10 +1,10 @@
 # Video prototype verification
 
-This record separates implemented and exercised behavior from research work that has not yet run. Code and data live in `/home/gys/Projects/nlp-assignment-3`.
+This record preserves the earlier integration checks and the completed full-data Colab experiment on 11 October 2026. Code and local data live in `/home/gys/Projects/nlp-assignment-3`.
 
 ## Verified locally
 
-Final local suite after review fixes: **107 passed in 29.14 seconds**. Ruff
+Earlier local suite after review fixes: **107 passed in 29.14 seconds**. Ruff
 check and format check passed (57 files). The real checkpoint/tool readiness
 command passed after regenerating the small real-data cache and retraining all
 three integration models. All nine rendered proposal pages were visually inspected after
@@ -17,7 +17,7 @@ the final document edit.
 - A simulated disconnect during training followed by resume produced exactly the same CPU model weights and losses as uninterrupted training on the test fixture. Resume refuses changed data/configuration. A separate interrupted-report test confirms incomplete exports are preserved and rebuilt.
 - The pinned SDK download was exercised against the real source. Network text is checksum-verified and parsed as literal assignments, never executed.
 
-## Actual new-video check
+## Earlier integration-checkpoint video check
 
 The spoken example is a 15-second excerpt, starting 15 seconds into the public-domain [24 January 2009 US presidential weekly address](https://commons.wikimedia.org/wiki/File:20090124_WeeklyAddress.ogv), resized to 640 pixels wide. Original paired speech and face were retained.
 
@@ -49,17 +49,143 @@ CSD measurement intervals are bins. Live audio uses 10 ms intervals and canonica
 
 The original CSD release does not identify exact historical extraction commits/settings. We established named features, units and a shared preprocessing contract, not identical numerical features. Human training transcripts and automatic upload transcripts differ too. A labelled evaluation of the complete video pipeline is still required to assess its accuracy and those distribution differences.
 
-## Colab handoff and remaining checks
+## Full Colab execution — 11 October 2026
 
-The two notebooks and small `dist/mosei-colab-source.zip` are prepared. All notebook code cells pass Python syntax checks. Source entries are hashed; the prepared cache is transferred with its hash. GPU allocation is printed, a separate one-epoch timing run estimates training time, and the current displayed compute-unit rate must be entered. Epoch checkpoints, prepared arrays and results persist in Drive. No Colab GPU session or cloud training was started from this environment.
+The installed authenticated Colab CLI 0.7.4 ran the preparation, timing, training
+and evaluation/export workflow on an NVIDIA A100-SXM4-80GB. The user completed
+the interactive Drive authorization. CLI-adapted notebooks replace only the
+browser upload/mount interactions and preserve the original pipeline and model
+configurations. Each phase uses one code cell: this CLI version otherwise
+continues after cell errors and can exit zero. All four completed output
+notebooks were inspected and contain no error outputs; completion artifacts
+were verified independently.
 
-Pending acceptance items:
+Full source CSD checksums match the local originals. The prepared cache retained
+all windows, used source-video folds and fitted normalization on training data
+only. Exactly neutral clips were excluded under the frozen binary protocol.
 
-- Prepare the complete research folds from the downloaded CSD streams in the Colab workflow.
-- Execute and validate the notebooks in the user's authenticated Colab runtime.
-- Train the frozen core models and ablations across three seeds, evaluate fixed checkpoints and generate the report. No final performance or full-training-time claim exists yet.
-- Export the validation-selected compatible Transformer and test it with fresh labelled English clips.
-- Inspect playback, progress and layout in a connected browser. The real Gradio API was tested, but the computer-use tool had no available browser surface.
+| Split | Eligible clips | Windows | Negative | Positive | Neutral exclusions |
+|---|---:|---:|---:|---:|---:|
+| Train | 12,789 | 13,242 | 4,739 | 8,050 | 3,538 |
+| Validation | 1,438 | 1,484 | 506 | 932 | 433 |
+| Test | 3,637 | 3,763 | 1,350 | 2,287 | 1,025 |
+
+No clips were excluded for missing words. Two test-fold videos,
+`7l3BNtSE0xc` and `dZFV0lyedX4`, lacked required streams. Clips with no usable
+vision were retained with masks: 211 training, 14 validation and 58 test clips.
+The prepared-data fingerprint is
+`50eba4dec0f14e7c2afaa9c60f5519366165b013ac08788e05353d6d71519682`.
+
+All six configurations completed seeds 1111, 1112 and 1113, using the frozen
+30-epoch maximum and six-epoch patience. The timing run measured 11.69 seconds
+for one full-data Transformer epoch. The sum of recorded training time across
+the 18 research runs was **1,284.27 seconds (21.4 minutes)**. This excludes
+preparation, evaluation and transfers. BERT representations are cached and
+frozen; the compact classifiers are trained on those prepared features, so
+source-file size alone does not determine epoch duration.
+
+The displayed runtime rate was 6.77 compute units/hour. Balance moved from
+197.24 to 189.00 units, approximately **8.24 units for the entire session**.
+Drive was flushed/unmounted after export, then the runtime was stopped.
+The final CLI check reported no active sessions, zero active assignments and
+0.00 units/hour.
+
+Recorded environment: Python 3.13.15, PyTorch 2.11.0+cu130, CUDA 13.0,
+Transformers 4.57.6, Tokenizers 0.22.2, faster-whisper 1.2.1,
+CTranslate2 4.8.2, NumPy 2.5.3 and SciPy 1.18.1. See the saved
+`environment.json` for the machine-readable record.
+
+### Held-out results and interpretation
+
+There are **234 completed evaluations**: 18 runs × 13 clean/missing/noise
+conditions. The matrix manifest was frozen before evaluation and checked
+against the final manifest. The table shows means and sample SD across three
+seeds; SD is expressed in percentage points.
+
+| Configuration | Macro F1 (%) | F1 SD (pp) | Accuracy (%) |
+|---|---:|---:|---:|
+| Text-only | 82.49 | 0.05 | 83.84 |
+| Concatenation | 82.42 | 0.38 | 83.76 |
+| Transformer | 82.66 | 0.69 | 83.61 |
+| Without modality embeddings | 82.63 | 0.19 | 83.55 |
+| Without positions | 82.61 | 0.39 | 83.81 |
+| Mean pooling | 82.06 | 0.13 | 83.16 |
+
+The Transformer's mean macro F1 difference from text-only is **+0.174
+percentage points**, with a 95% paired source-video bootstrap interval of
+**[-0.617, +0.973]**. Against concatenation it is **+0.245 points**, with
+interval **[-0.584, +1.114]**. Both intervals include zero; these runs do not
+establish a clear clean-data improvement. Accuracy is slightly higher for the
+text-only baseline. The intervals use 2,000 resamples of 639 source-video
+clusters, bootstrap seed 2026, holding the fitted training seeds fixed.
+
+When text features are masked, mean macro F1 is 58.83% for the Transformer,
+46.27% for concatenation and 38.61% for text-only. This supports stronger
+performance under this specific missing-text intervention. Feature corruption
+experiments do not establish robustness to all real recording conditions.
+
+The demo checkpoint was selected **before test evaluation** from Transformer
+runs using validation macro F1, with validation loss as the tie-breaker:
+`transformer-seed1113`, best epoch 3, validation macro F1 0.8297993. It is not
+the seed with the highest observed test score. Its local run records explicitly
+identify it as a full-data checkpoint, and its feature fingerprint matches the
+installed upload extractors.
+
+### Exports and full-data demo acceptance
+
+Drive location: `MyDrive/NLP_Assignment_3`. The full prepared cache and all
+research runs remain there, with run directory
+`runs-csd-50eba4dec0f14e7c`. Local exports are:
+
+- [Research report](../results/colab-20261011/results.md), including CSV/JSON
+  metrics, paired differences, error examples and six confusion plots.
+- Selected model and normalization in `runs/colab/selected-run/`.
+- `runs/colab-20261011/`: input/output notebooks, environment, data audit,
+  frozen manifest, timing, training records, logs and acceptance records.
+- Three final ZIP archives, verified against the remote SHA-256 manifest,
+  plus `execution-evidence.zip` with the operational notebooks and executed
+  source bundle. Copies of the execution evidence and final exports were
+  saved in Drive before shutdown.
+
+The selected checkpoint ZIP SHA-256 is
+`b18c355d04ed4e88b5e6eb3f2b311a481e1a4889da4da9f135c50d6d1af00d50`.
+The executed source bundle is preserved separately from subsequent notebook
+setup fixes, so a rebuilt handoff bundle is not confused with the code used
+for the experiment.
+
+The full-data model passed readiness checks and real Gradio API uploads at
+http://127.0.0.1:7860:
+
+| Check | Observed result |
+|---|---|
+| Spoken 15-second example | Negative sentiment; negative probability 0.9085; transcript and one speech window populated |
+| Processing time | 82.7 seconds; 82.92 seconds including the client request |
+| Silent example | Explicit no-speech error; probabilities, transcript and window rows cleared |
+| Checkpoint status | Full-data seed 1113, epoch 3; no integration/pending warning |
+
+These clips establish pipeline operation, not accuracy on newly recorded
+videos. Gradio serializes an empty probability Label as `{}`; the acceptance
+assertion was corrected to accept that representation and the silent check
+was repeated successfully. The authoritative results are
+`runs/colab-20261011/demo-acceptance.json` and the two saved response JSON files.
+
+Initial desktop layout and missing-video handling were inspected in the
+connected browser. Browser upload was prevented by the tool's allowed file
+roots, which did not include Projects; the upload checks above used the real
+local Gradio API. Playback and progress appearance still need manual review.
+
+Colab setup exposed two problems: the running notebook kernel did not discover
+the newly installed editable package, and it retained an older NumPy in memory
+after installation. A kernel restart resolved the actual run. The generated
+notebooks now expose the source path immediately and stop with a restart
+instruction when loaded package versions disagree with the pinned manifest.
+Regression tests failed before this fix, then **110 tests passed in 25.26
+seconds**; Ruff and notebook syntax checks passed.
+
+Remaining project work is to test fresh labelled English uploads, visually
+review upload/playback and progress, and use the frozen evidence to write the
+assignment report and presentation. The historical extractor and automatic
+transcript distribution differences described above remain limitations.
 
 The proposal is updated in its existing Course location with the upload pipeline, feature selection and Colab plan. Its prior version is backed up at `data/proposal-backup/before-video-prototype.docx`. Rendered proposal pages are internal layout checks, not new assignment deliverables.
 
@@ -81,10 +207,10 @@ issues were reproduced and corrected with regression tests that failed first:
   boundary and confirms checkpoint metrics match the reported selected epoch.
 
 The real prepared-cache archive also completed a local write/restore round trip.
-The generated notebook calls those tested recovery functions. Full Colab execution,
-full-fold accuracy/cost and visual browser acceptance remain pending; historical
-extractor numerical parity remains unknown. These limits are retained rather than
-inferred from software tests.
+The generated notebook calls those tested recovery functions. At that review,
+full Colab execution, full-fold accuracy/cost and visual browser acceptance were
+pending. The completed cloud run is documented above; historical extractor
+numerical parity remains unknown.
 
 A repeated real upload exposed preview-cache expiration during the slower CPU
 extraction stage. The pipeline now copies the upload into its per-request
