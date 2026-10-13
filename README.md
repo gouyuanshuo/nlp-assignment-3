@@ -8,6 +8,22 @@ Mean test macro F1 across three seeds is **82.49% for text-only, 82.42% for conc
 
 **Task:** negative (`y < 0`) versus positive (`y > 0`). Exactly neutral clips are excluded. The model has no neutral class, and its softmax probabilities are not calibrated measures of a person's internal emotion.
 
+## Classmates start here
+
+Use the **pretrained Docker demo** on Linux, macOS (Intel or Apple Silicon), or Windows through WSL2. You do not need Python, CUDA, the training dataset, or a Colab account on your computer. Install Docker and GitHub CLI, then run:
+
+```bash
+gh auth login
+gh repo clone gouyuanshuo/nlp-assignment-3
+cd nlp-assignment-3
+./demo.sh setup
+./demo.sh
+```
+
+Open **http://localhost:7860**. Setup downloads the trained checkpoint, BERT/Whisper weights and matching Docker images from the `demo-v1` release, verifies checksums and runs the readiness check. The large first download is needed only once. Subsequent launches use local files. Stop with Ctrl+C.
+
+See **[Classmate setup guide](docs/classmate-setup.md)** for operating-system instructions, resource requirements, manual downloads, troubleshooting and how to change the code. macOS and Windows support is designed around Docker Desktop; the end-to-end verification platform is Linux x86_64.
+
 ## Train in Google Colab
 
 All local code and data stay in `/home/gys/Projects/nlp-assignment-3`.

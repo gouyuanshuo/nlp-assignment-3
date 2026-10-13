@@ -1,0 +1,7 @@
+**
+!pyproject.toml
+!uv.lock
+!.python-version
+!tools/
+!tools/demo/
+!tools/demo/Dockerfile
