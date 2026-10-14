@@ -37,6 +37,12 @@ def _parser():
     train.add_argument("--epochs", type=int)
     train.add_argument("--device", choices=["auto", "cpu", "cuda"])
     train.add_argument(
+        "--train-fraction",
+        type=float,
+        dest="train_fraction",
+        help="Fraction of training videos to keep, stratified by majority label",
+    )
+    train.add_argument(
         "--resume",
         action="store_true",
         help="Resume the saved epoch state with unchanged config/data",
@@ -196,7 +202,7 @@ def main(argv=None):
             config = load_config(args.config)
             overrides = {
                 k: getattr(args, k)
-                for k in ("seed", "epochs", "device")
+                for k in ("seed", "epochs", "device", "train_fraction")
                 if getattr(args, k) is not None
             }
             config = replace(config, training=replace(config.training, **overrides))

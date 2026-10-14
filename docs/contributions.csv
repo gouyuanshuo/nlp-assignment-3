@@ -1,1 +1,2 @@
 member,owned_deliverable,commit_or_file,experiment_id,contribution_notes,status
+Qiushi Huang,modality retraining and training-size curve,scripts/run_qiushi_experiments.py,runs/qiushi,Trained text+vision and text+audio Transformers plus a 10-100% video-stratified curve on the shared CSD cache. Clean-data differences from text-only stay inside the video-cluster bootstrap interval.,completed

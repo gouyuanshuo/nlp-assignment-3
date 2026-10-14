@@ -19,6 +19,7 @@ class TrainingConfig:
     device: str = "auto"
     num_workers: int = 0
     threads: int = 4
+    train_fraction: float = 1.0
 
     def __post_init__(self):
         if (
@@ -32,6 +33,12 @@ class TrainingConfig:
             raise ValueError("Invalid optimizer configuration")
         if self.device not in {"auto", "cpu", "cuda"}:
             raise ValueError("device must be auto, cpu or cuda")
+        if (
+            isinstance(self.train_fraction, bool)
+            or not isinstance(self.train_fraction, (int, float))
+            or not 0 < float(self.train_fraction) <= 1
+        ):
+            raise ValueError("train_fraction must be in (0, 1]")
 
 
 @dataclass(frozen=True)

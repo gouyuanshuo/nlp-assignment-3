@@ -18,6 +18,7 @@ from .data import LABEL_RULE, FeatureDataset, PreparedData
 from .io import read_json, write_json
 from .metrics import classification_metrics
 from .models import build_model
+from .subset import training_subset
 from .window_data import clip_logits, collate_clips
 
 
@@ -145,6 +146,9 @@ def train_run(data: PreparedData, config: ExperimentConfig, output: Path, *, res
     else:
         output.mkdir(parents=True, exist_ok=False)
     settings = config.training
+    train_data, subset_record = training_subset(
+        data.splits["train"], settings.train_fraction, settings.seed
+    )
     seed_everything(settings.seed)
     torch.set_num_threads(settings.threads)
     device = choose_device(settings.device)
@@ -154,7 +158,7 @@ def train_run(data: PreparedData, config: ExperimentConfig, output: Path, *, res
     )
     generator = torch.Generator().manual_seed(settings.seed)
     loader = DataLoader(
-        data.splits["train"],
+        train_data,
         batch_size=settings.batch_size,
         shuffle=True,
         generator=generator,
@@ -179,6 +183,14 @@ def train_run(data: PreparedData, config: ExperimentConfig, output: Path, *, res
         "device_name": torch.cuda.get_device_name(0) if device == "cuda" else "CPU",
         "trainable_parameters": sum(p.numel() for p in model.parameters() if p.requires_grad),
     }
+    if subset_record is not None:
+        metadata["train_subset"] = subset_record
+        print(
+            f"Training subset: {subset_record['clip_count']} clips from "
+            f"{subset_record['video_count']} videos "
+            f"({subset_record['fraction']:.0%} of {subset_record['full_clip_count']} train clips)",
+            flush=True,
+        )
     if "feature_manifest" in data.audit:
         metadata["feature_manifest"] = data.audit["feature_manifest"]
         metadata["window_aggregation"] = "duration-weighted mean logits before loss/softmax"

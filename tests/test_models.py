@@ -75,3 +75,21 @@ def test_transformer_gradient_reaches_each_modality_and_attention():
 def test_ablation_configs_execute(option):
     model = build_model(ModelConfig(d_model=8, n_heads=2, ff_dim=16, **option), DIMS)
     assert torch.isfinite(model(*batch())).all()
+
+
+def test_dropped_modality_has_no_parameters_and_cannot_change_logits():
+    torch.manual_seed(0)
+    model = build_model(
+        ModelConfig(
+            d_model=8, n_heads=2, ff_dim=16, dropout=0, modalities=["text", "vision"]
+        ),
+        DIMS,
+    ).eval()
+    features, masks = batch()
+    expected = model(features, masks)
+    changed = dict(features)
+    changed["audio"] = features["audio"] + 50
+    torch.testing.assert_close(model(changed, masks), expected)
+    assert set(model.projections) == {"text", "vision"}
+    with pytest.raises(ValueError):
+        ModelConfig(modalities=["text", "missing"])

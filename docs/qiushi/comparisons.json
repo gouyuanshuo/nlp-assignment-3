@@ -1,0 +1,72 @@
+{
+  "transformer-text-vision minus text-frac100": {
+    "mean_difference": 0.0026746996267015635,
+    "per_seed_differences": [
+      0.001966468182958203,
+      -0.00044418984093752556,
+      0.006501820538084013
+    ],
+    "ci_low": -0.005421768259732908,
+    "ci_high": 0.01014878301960319,
+    "cluster_count": 639,
+    "resamples": 2000,
+    "bootstrap_seed": 2026,
+    "interpretation": "95% percentile CI over source-video resampling; trained seeds held fixed"
+  },
+  "transformer-text-audio minus text-frac100": {
+    "mean_difference": -0.0003670684892416916,
+    "per_seed_differences": [
+      -0.0007315845838969937,
+      -0.00494721825486566,
+      0.004577597371037578
+    ],
+    "ci_low": -0.008298567752801949,
+    "ci_high": 0.007560316742491744,
+    "cluster_count": 639,
+    "resamples": 2000,
+    "bootstrap_seed": 2026,
+    "interpretation": "95% percentile CI over source-video resampling; trained seeds held fixed"
+  },
+  "transformer-text-vision minus transformer-frac100": {
+    "mean_difference": 0.0012900123030748685,
+    "per_seed_differences": [
+      -0.0017586254903154686,
+      0.005748736609505367,
+      -0.00012007420996529294
+    ],
+    "ci_low": -0.004379888326480067,
+    "ci_high": 0.006653417087469025,
+    "cluster_count": 639,
+    "resamples": 2000,
+    "bootstrap_seed": 2026,
+    "interpretation": "95% percentile CI over source-video resampling; trained seeds held fixed"
+  },
+  "transformer-text-audio minus transformer-frac100": {
+    "mean_difference": -0.0017517558128683868,
+    "per_seed_differences": [
+      -0.004456678257170665,
+      0.0012457081955772331,
+      -0.002044297377011728
+    ],
+    "ci_low": -0.007730372293296473,
+    "ci_high": 0.0042374277129848875,
+    "cluster_count": 639,
+    "resamples": 2000,
+    "bootstrap_seed": 2026,
+    "interpretation": "95% percentile CI over source-video resampling; trained seeds held fixed"
+  },
+  "transformer-frac100 minus text-frac100": {
+    "mean_difference": 0.001384687323626695,
+    "per_seed_differences": [
+      0.0037250936732736717,
+      -0.006192926450442893,
+      0.006621894748049306
+    ],
+    "ci_low": -0.006939737674860989,
+    "ci_high": 0.00963885717012407,
+    "cluster_count": 639,
+    "resamples": 2000,
+    "bootstrap_seed": 2026,
+    "interpretation": "95% percentile CI over source-video resampling; trained seeds held fixed"
+  }
+}
