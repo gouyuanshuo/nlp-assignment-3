@@ -40,7 +40,7 @@ def _parser():
         "--train-fraction",
         type=float,
         dest="train_fraction",
-        help="Fraction of training videos to keep, stratified by majority label",
+        help="Target fraction of training clips, selecting whole videos stratified by majority label",
     )
     train.add_argument(
         "--resume",

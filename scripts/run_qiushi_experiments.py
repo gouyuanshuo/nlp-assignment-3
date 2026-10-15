@@ -172,7 +172,7 @@ def write_curve(output: Path, rows: list[dict]):
             axis.scatter([percent] * len(scores), scores, color=color, alpha=0.45, s=24)
         if xs:
             axis.plot(xs, means, color=color, marker="o", label=model)
-    axis.set_xlabel("Training videos kept (%)")
+    axis.set_xlabel("Target training clips (%) — whole videos")
     axis.set_ylabel("Test macro-F1")
     axis.set_ylim(0.78, 0.85)
     axis.set_xticks(list(FRACTIONS))

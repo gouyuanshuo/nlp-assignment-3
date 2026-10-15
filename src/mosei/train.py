@@ -121,7 +121,8 @@ def train_run(data: PreparedData, config: ExperimentConfig, output: Path, *, res
     if output.exists():
         if not resume:
             raise FileExistsError(f"Training directory already exists: {output}")
-        if read_json(output / "config.json") != asdict(config):
+        # Apply defaults for fields absent from runs saved by older versions.
+        if config_from_dict(read_json(output / "config.json")) != config:
             raise ValueError("Resume configuration differs from the saved run")
         if read_json(output / "data_audit.json")["fingerprint"] != data.fingerprint:
             raise ValueError("Resume data fingerprint differs from the saved run")
@@ -134,7 +135,7 @@ def train_run(data: PreparedData, config: ExperimentConfig, output: Path, *, res
                     "Resume checkpoint predates atomic best-state recovery; start a new run"
                 )
             if (
-                state["metadata"]["config"] != asdict(config)
+                config_from_dict(state["metadata"]["config"]) != config
                 or state["metadata"]["data_fingerprint"] != data.fingerprint
             ):
                 raise ValueError("Resume checkpoint configuration/data differs")
