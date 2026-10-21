@@ -1,9 +1,19 @@
+"""Teammate MSALMT port with its custom five-node graph classifier.
+
+This preserves the submitted architecture, not a claim of paper-exact ALMT.
+Input widths come from the prepared cache; ``image`` is named ``vision`` here.
+"""
+
 from __future__ import annotations
+
 import copy
+
 import torch
 from torch import nn
-from mosei_dataset import FEATURE_DIMS
-from .ALMT_data import MODALITIES
+
+from .data import MODALITIES
+from .models import masked_mean, prepare_multimodal_inputs
+
 
 class ModalityEmbedding(nn.Module):
     def __init__(
@@ -47,6 +57,7 @@ class ModalityEmbedding(nn.Module):
                 f"Input sequence length {features.shape[1]} exceeds configured "
                 f"maximum {self.position_embeddings.shape[1]}."
             )
+        features = features.masked_fill(~valid_mask[..., None], 0)
         projected = self.input_projection(features)
         projected = projected + self.position_embeddings[:, : projected.shape[1]]
         latents = self.latent_tokens.expand(features.shape[0], -1, -1)
@@ -56,7 +67,10 @@ class ModalityEmbedding(nn.Module):
         )
         padding_mask = torch.cat((latent_padding, ~valid_mask.bool()), dim=1)
         encoded = self.transformer(combined, src_key_padding_mask=padding_mask)
-        return encoded[:, : self.token_count]
+        # Latent queries remain valid even when every input token is padding.
+        # Zero an absent stream without ever all-masking an attention row.
+        return encoded[:, : self.token_count].masked_fill(~valid_mask.any(dim=1)[:, None, None], 0)
+
 
 class AdaptiveHyperModalityLayer(nn.Module):
     def __init__(self, hidden_dim: int, num_heads: int, dropout: float):
@@ -78,6 +92,8 @@ class AdaptiveHyperModalityLayer(nn.Module):
         audio_padding_mask: torch.Tensor,
         visual_padding_mask: torch.Tensor,
         hyper: torch.Tensor,
+        audio_present: torch.Tensor,
+        visual_present: torch.Tensor,
     ) -> torch.Tensor:
         audio_context, _ = self.language_to_audio(
             query=language_scale,
@@ -93,7 +109,10 @@ class AdaptiveHyperModalityLayer(nn.Module):
             key_padding_mask=visual_padding_mask,
             need_weights=False,
         )
+        audio_context = audio_context.masked_fill(~audio_present[:, None, None], 0)
+        visual_context = visual_context.masked_fill(~visual_present[:, None, None], 0)
         return self.norm(hyper + self.dropout(audio_context) + self.dropout(visual_context))
+
 
 class CrossModalFusionLayer(nn.Module):
     def __init__(self, hidden_dim: int, num_heads: int, dropout: float):
@@ -121,6 +140,7 @@ class CrossModalFusionLayer(nn.Module):
         query = self.norm_attention(query + self.dropout(attended))
         return self.norm_feed_forward(query + self.dropout(self.feed_forward(query)))
 
+
 class MultimodalGraphLayer(nn.Module):
     def __init__(self, hidden_dim: int, dropout: float):
         super().__init__()
@@ -144,14 +164,15 @@ class MultimodalGraphLayer(nn.Module):
         edge_logits = torch.matmul(self.query(nodes), self.key(nodes).transpose(1, 2)) * scale
         edge_weights = torch.softmax(edge_logits + self.edge_bias, dim=-1)
         aggregated = torch.matmul(edge_weights, self.message(nodes))
-        updated = self.message_norm(
-            self.self_projection(nodes) + self.dropout(aggregated)
-        )
+        updated = self.message_norm(self.self_projection(nodes) + self.dropout(aggregated))
         updated = self.output_norm(updated + self.dropout(self.feed_forward(updated)))
         return updated, edge_weights
 
+
 class MultimodalGraphRegressor(nn.Module):
-    def __init__(self, hidden_dim: int, dropout: float, score_limit: float = 3.0, output_dim: int = 1):
+    def __init__(
+        self, hidden_dim: int, dropout: float, score_limit: float = 3.0, output_dim: int = 1
+    ):
         super().__init__()
         self.graph_layers = nn.ModuleList(
             [MultimodalGraphLayer(hidden_dim, dropout) for _ in range(2)]
@@ -180,32 +201,28 @@ class MultimodalGraphRegressor(nn.Module):
         raw_score = raw_output.squeeze(-1)
         return self.score_limit * torch.tanh(raw_score / self.score_limit)
 
-class MSALMT(nn.Module):
-    def __init__(
-        self,
-        feature_dims: dict[str, int] | None = None,
-        hidden_dim: int = 128,
-        token_count: int = 8,
-        max_input_length: int = 256,
-        num_heads: int = 8,
-        ahl_depth: int = 3,
-        fusion_depth: int = 4,
-        dropout: float = 0.1,
-        output_dim: int = 1,
-        use_modality_embedding: bool = True,
-        use_ahl: bool = True,
-        use_cross_modal_fusion: bool = True,
-        use_graph_fusion: bool = True,
-    ):
+
+class ALMTClassifier(nn.Module):
+    def __init__(self, config, feature_dims: dict[str, int]):
         super().__init__()
-        if hidden_dim % num_heads:
-            raise ValueError("hidden_dim must be divisible by num_heads.")
-        if token_count < 1 or ahl_depth != 3 or fusion_depth < 1:
-            raise ValueError("token_count/fusion_depth must be positive; ALMT uses three AHL scales.")
+        self.config = config
+        self.feature_dims = dict(feature_dims)
+        hidden_dim = config.d_model
+        token_count = config.almt_token_count
+        max_input_length = config.almt_max_input_length
+        num_heads = config.n_heads
+        ahl_depth = 3  # Three language scales are intrinsic to the teammate model.
+        fusion_depth = config.almt_fusion_depth
+        dropout = config.dropout
+        output_dim = 2
+        use_modality_embedding = config.modality_embeddings
+        use_ahl = config.almt_use_ahl
+        use_cross_modal_fusion = config.almt_use_cross_modal_fusion
+        use_graph_fusion = config.almt_use_graph_fusion
         self.modality_embedding = nn.ModuleDict(
             {
                 modality: ModalityEmbedding(
-                    (feature_dims or FEATURE_DIMS)[modality],
+                    feature_dims[modality],
                     hidden_dim,
                     token_count,
                     max_input_length,
@@ -224,9 +241,7 @@ class MSALMT(nn.Module):
             batch_first=True,
             norm_first=True,
         )
-        self.language_scales = nn.ModuleList(
-            [copy.deepcopy(language_layer) for _ in range(2)]
-        )
+        self.language_scales = nn.ModuleList([copy.deepcopy(language_layer) for _ in range(2)])
         self.language_norms = nn.ModuleList([nn.LayerNorm(hidden_dim) for _ in range(2)])
         self.initial_hyper_tokens = nn.Parameter(torch.empty(1, token_count, hidden_dim))
         self.ahl_layers = nn.ModuleList(
@@ -236,13 +251,11 @@ class MSALMT(nn.Module):
         self.fusion_layers = nn.ModuleList(
             [CrossModalFusionLayer(hidden_dim, num_heads, dropout) for _ in range(fusion_depth)]
         )
-        self.regressor = MultimodalGraphRegressor(
-            hidden_dim, dropout, output_dim=output_dim
-        )
+        self.regressor = MultimodalGraphRegressor(hidden_dim, dropout, output_dim=output_dim)
         self.raw_projections = nn.ModuleDict(
             {
                 modality: nn.Sequential(
-                    nn.Linear((feature_dims or FEATURE_DIMS)[modality], hidden_dim),
+                    nn.Linear(feature_dims[modality], hidden_dim),
                     nn.LayerNorm(hidden_dim),
                 )
                 for modality in MODALITIES
@@ -263,21 +276,20 @@ class MSALMT(nn.Module):
         nn.init.normal_(self.initial_hyper_tokens, mean=0.0, std=0.02)
         nn.init.normal_(self.fusion_token, mean=0.0, std=0.02)
 
-    def forward(self, batch: dict[str, torch.Tensor]) -> torch.Tensor:
+    def forward(self, features, masks) -> torch.Tensor:
+        features, masks = prepare_multimodal_inputs(
+            features, masks, self.config.modalities, self.feature_dims
+        )
         if self.use_modality_embedding:
             embedded = {
-                modality: self.modality_embedding[modality](
-                    batch[f"{modality}_features"], batch[f"{modality}_mask"]
-                )
+                modality: self.modality_embedding[modality](features[modality], masks[modality])
                 for modality in MODALITIES
             }
         else:
             embedded = {}
             for modality in MODALITIES:
-                features = batch[f"{modality}_features"]
-                valid_mask = batch[f"{modality}_mask"].to(features.dtype).unsqueeze(-1)
-                projected = self.raw_projections[modality](features)
-                pooled = (projected * valid_mask).sum(dim=1) / valid_mask.sum(dim=1).clamp_min(1)
+                projected = self.raw_projections[modality](features[modality])
+                pooled = masked_mean(projected, masks[modality])
                 embedded[modality] = pooled.unsqueeze(1).expand(
                     -1, self.initial_hyper_tokens.shape[1], -1
                 )
@@ -286,14 +298,25 @@ class MSALMT(nn.Module):
             language_scales.append(norm(layer(language_scales[-1])))
 
         audio = embedded["audio"]
-        visual = embedded["image"]
+        visual = embedded["vision"]
         hyper = self.initial_hyper_tokens.expand(audio.shape[0], -1, -1)
-        all_valid = torch.zeros(
+        # These are learned latent tokens, not padded source frames. The original
+        # code inverted an all-False mask and silently disabled every AHL key.
+        latent_padding = torch.zeros(
             (audio.shape[0], audio.shape[1]), dtype=torch.bool, device=audio.device
         )
         if self.use_ahl:
             for language, ahl_layer in zip(language_scales, self.ahl_layers):
-                hyper = ahl_layer(language, audio, visual, ~all_valid, ~all_valid, hyper)
+                hyper = ahl_layer(
+                    language,
+                    audio,
+                    visual,
+                    latent_padding,
+                    latent_padding,
+                    hyper,
+                    masks["audio"].any(dim=1),
+                    masks["vision"].any(dim=1),
+                )
         else:
             hyper = 0.5 * (audio + visual)
 

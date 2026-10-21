@@ -1,0 +1,22 @@
+name = "almt"
+[model]
+name = "almt"
+d_model = 128
+hidden_dim = 128
+n_heads = 8
+dropout = 0.1
+modality_embeddings = true
+almt_token_count = 8
+almt_max_input_length = 256
+almt_fusion_depth = 4
+almt_use_ahl = true
+almt_use_cross_modal_fusion = true
+almt_use_graph_fusion = true
+[training]
+epochs = 30
+batch_size = 32
+learning_rate = 0.0003
+weight_decay = 0.0001
+patience = 6
+seed = 1111
+device = "auto"

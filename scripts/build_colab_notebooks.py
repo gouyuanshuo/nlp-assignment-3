@@ -188,36 +188,76 @@ def build():
         print('Checkpoints will be saved to:', RUNS)
         """),
         markdown("""
-        ## Measure before the full matrix
+        ## Choose the matrix, then measure each configuration
 
-        This separate one-epoch run estimates throughput and does not enter the
-        research results. Enter the **current** Colab rate below. The estimate
-        covers training and validation, and excludes download, BERT preparation,
-        held-out robustness evaluation, and idle time. Early stopping can shorten
-        training. These are estimates, not a compute-unit spending cap.
+        The default remains the original 3 models and 3 Transformer ablations,
+        each with 3 seeds. Set `INCLUDE_HANLIN_MODELS = True` to add the integrated
+        **ALMT** and **Graph_MFN** binary classifiers (6 extra runs). They use the
+        same prepared data and training/evaluation protocol, not the separate
+        legacy scripts or a missing `mosei_dataset.py`. You can instead edit
+        `CONFIG_PATHS` to run only the configurations you want.
+
+        A fresh one-epoch calibration for **each selected configuration** measures
+        its own training/validation pace on this runtime; no model inherits the
+        Transformer's timing. Calibrations consume compute but are separate from
+        research results. Rerunning the timing cell recalibrates rather than
+        reusing measurements from an earlier GPU session.
+
+        Enter the **current** Colab rate below. The matrix estimate extrapolates
+        each configuration to its epoch limit and excludes calibration, downloads,
+        BERT preparation, held-out robustness evaluation, and idle time. Early
+        stopping can shorten training, while later epochs and Drive writes may
+        vary. This is neither an upper bound nor a compute-unit spending cap.
+        Choose `EXPORT_MODEL` before inspecting test results; the selected seed
+        is chosen only by validation scores within that model.
         """),
         code("""
         UNITS_PER_HOUR = None  # Enter the rate displayed by your current Colab GPU session.
         AVAILABLE_UNITS = 200  # Replace with your remaining balance.
-        INCLUDE_ABLATIONS = True  # 6 configurations x 3 seeds; False runs the 3 core configurations.
-        timing = STORE / ('timing-' + audit['fingerprint'][:16])
-        subprocess.run([sys.executable, '-m', 'mosei', 'train', '--data', str(cache),
-                        '--config', 'configs/transformer.toml', '--output', str(timing),
-                        '--epochs', '1', '--device', 'cuda', '--resume'], check=True)
-        measured = json.loads((timing / 'run.json').read_text())
-        epoch_seconds = json.loads((timing / 'history.json').read_text())[0]['seconds']
-        max_runs = (6 if INCLUDE_ABLATIONS else 3) * 3
-        estimated_hours = epoch_seconds * 30 * max_runs / 3600
-        print(f'Measured Transformer epoch: {epoch_seconds:.1f} seconds on {measured["device_name"]}')
-        print(f'Conservative training-only estimate using that pace for every model: {estimated_hours:.2f} hours')
+        INCLUDE_ABLATIONS = True  # The original 3 Transformer ablations.
+        INCLUDE_HANLIN_MODELS = False  # Explicit opt-in: add ALMT and Graph_MFN.
+        SEEDS = [1111, 1112, 1113]
+        EXPORT_MODEL = 'transformer'  # Or 'almt' / 'graph_mfn' if included in CONFIG_PATHS.
+        CONFIG_PATHS = [f'configs/{name}.toml' for name in ('text', 'concat', 'transformer')]
+        if INCLUDE_ABLATIONS:
+            CONFIG_PATHS += [f'configs/{name}.toml' for name in ('no_modality', 'no_positions', 'mean_pooling')]
+        if INCLUDE_HANLIN_MODELS:
+            CONFIG_PATHS += ['configs/almt.toml', 'configs/graph_mfn.toml']
+        print(f'Selected {len(CONFIG_PATHS)} configurations x {len(SEEDS)} seeds.')
+        print(CONFIG_PATHS)
+        """),
+        code("""
+        import time
+        from mosei.config import load_config
+
+        if not CONFIG_PATHS or not SEEDS:
+            raise ValueError('Choose at least one configuration and one seed.')
+        if UNITS_PER_HOUR is not None and UNITS_PER_HOUR <= 0:
+            raise ValueError('UNITS_PER_HOUR must be positive or None.')
+        # Each invocation gets a fresh directory, so old GPU timings cannot be reused.
+        timing = STORE / ('timing-' + audit['fingerprint'][:16]) / str(time.time_ns())
+        estimated_hours = 0.0
+        for config_path in CONFIG_PATHS:
+            config = load_config(Path(config_path))
+            measured_run = timing / config.name
+            subprocess.run([sys.executable, '-m', 'mosei', 'train', '--data', str(cache),
+                            '--config', config_path, '--output', str(measured_run),
+                            '--epochs', '1', '--seed', str(SEEDS[0]), '--device', 'cuda'], check=True)
+            measured = json.loads((measured_run / 'run.json').read_text())
+            epoch_seconds = json.loads((measured_run / 'history.json').read_text())[0]['seconds']
+            model_hours = epoch_seconds * config.training.epochs * len(SEEDS) / 3600
+            estimated_hours += model_hours
+            print(f'{config.name}: {epoch_seconds:.1f} seconds/epoch on {measured["device_name"]}; '
+                  f'{len(SEEDS)} seeds x {config.training.epochs} epochs: {model_hours:.2f} hours')
+        print(f'Matrix training/validation extrapolation: {estimated_hours:.2f} hours (not an upper bound)')
         if UNITS_PER_HOUR is not None:
-            print(f'Estimated training units: {estimated_hours * UNITS_PER_HOUR:.1f}; budget hours: {AVAILABLE_UNITS / UNITS_PER_HOUR:.2f}')
+            print(f'Estimated matrix units: {estimated_hours * UNITS_PER_HOUR:.1f}; '
+                  f'budget hours at the entered rate: {AVAILABLE_UNITS / UNITS_PER_HOUR:.2f}')
         """),
         code("""
         matrix = [sys.executable, 'scripts/run_experiments.py', '--data', str(cache),
-                  '--output', str(RUNS), '--device', 'cuda', '--resume']
-        if INCLUDE_ABLATIONS:
-            matrix.append('--include-ablations')
+                  '--output', str(RUNS), '--device', 'cuda', '--resume',
+                  '--configs', *CONFIG_PATHS, '--seeds', *[str(seed) for seed in SEEDS]]
         subprocess.run([*matrix, '--train-only'], check=True)
         print('Training finished. best.pt is selected only by validation macro F1 / loss.')
         """),
@@ -225,7 +265,8 @@ def build():
         If the runtime disconnects, reconnect and rerun the setup/cache cells and
         the same matrix cell. Completed runs are reused; interrupted runs restore
         the last completed epoch, optimizer and RNG state. A partial epoch repeats.
-        Changing the configuration or data requires a different output directory.
+        Changing `CONFIG_PATHS`, seeds, configurations, or data requires a different
+        `RUNS` output directory; resume deliberately rejects a changed matrix.
         Exact numerical reproducibility also depends on hardware/software.
 
         Freeze all modeling choices before running the held-out evaluation cell.
@@ -237,9 +278,12 @@ def build():
         code("""
         from google.colab import files
         candidates = []
-        for directory in RUNS.glob('transformer-seed*'):
+        for directory in RUNS.glob(f'{EXPORT_MODEL}-seed*'):
             result = json.loads((directory / 'run.json').read_text())
             candidates.append((result['best_validation']['macro_f1'], -result['best_validation']['loss'], directory))
+        if not candidates:
+            raise ValueError(f'No trained runs for {EXPORT_MODEL}. Include it in CONFIG_PATHS, '
+                             'finish training, or choose an available EXPORT_MODEL.')
         selected = max(candidates, key=lambda x: x[:2])[2]  # Never select by test scores.
         export = Path('/content/mosei-video-checkpoint.zip')
         with zipfile.ZipFile(export, 'w', compression=zipfile.ZIP_DEFLATED) as archive:

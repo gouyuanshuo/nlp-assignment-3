@@ -1,4 +1,4 @@
-"""The three classifiers share cached inputs, masks, and two-logit outputs."""
+"""All classifiers share cached inputs, valid-token masks, and two-logit outputs."""
 
 import math
 from dataclasses import dataclass, field
@@ -29,9 +29,20 @@ class ModelConfig:
     positions: bool = True
     pooling: str = "cls"
     modalities: list[str] = field(default_factory=lambda: list(MODALITIES))
+    almt_token_count: int = 8
+    almt_max_input_length: int = 256
+    almt_fusion_depth: int = 4
+    almt_use_ahl: bool = True
+    almt_use_cross_modal_fusion: bool = True
+    almt_use_graph_fusion: bool = True
+    graph_mfn_heads: int = 4
+    graph_use_dynamic_graph: bool = True
+    graph_use_view_memory: bool = True
+    graph_use_fusion_memory: bool = True
+    graph_use_temporal_attention: bool = True
 
     def __post_init__(self):
-        if self.name not in {"text", "concat", "transformer"}:
+        if self.name not in {"text", "concat", "transformer", "almt", "graph_mfn"}:
             raise ValueError(f"Unknown model: {self.name}")
         if min(self.d_model, self.hidden_dim, self.n_layers, self.n_heads, self.ff_dim) < 1:
             raise ValueError("Model dimensions/layers/heads must be positive")
@@ -39,6 +50,28 @@ class ModelConfig:
             raise ValueError("d_model must be even and divisible by n_heads")
         if not 0 <= self.dropout < 1 or self.pooling not in {"cls", "mean"}:
             raise ValueError("Invalid dropout or pooling")
+        for name in (
+            "almt_token_count",
+            "almt_max_input_length",
+            "almt_fusion_depth",
+            "graph_mfn_heads",
+        ):
+            value = getattr(self, name)
+            if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+                raise ValueError(f"{name} must be a positive integer")
+        if self.name == "graph_mfn" and self.hidden_dim % self.graph_mfn_heads:
+            raise ValueError("hidden_dim must be divisible by graph_mfn_heads")
+        for name in (
+            "almt_use_ahl",
+            "almt_use_cross_modal_fusion",
+            "almt_use_graph_fusion",
+            "graph_use_dynamic_graph",
+            "graph_use_view_memory",
+            "graph_use_fusion_memory",
+            "graph_use_temporal_attention",
+        ):
+            if not isinstance(getattr(self, name), bool):
+                raise ValueError(f"{name} must be a boolean")
         chosen = _canonical_modalities(self.modalities)
         if self.name == "text":
             if chosen not in (["text"], list(MODALITIES)):
@@ -52,6 +85,34 @@ class ModelConfig:
 def masked_mean(features: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
     safe = features.masked_fill(~mask[..., None], 0)
     return safe.sum(dim=1) / mask.sum(dim=1, keepdim=True).clamp_min(1)
+
+
+def prepare_multimodal_inputs(features, masks, modalities, feature_dims):
+    """Validate aligned inputs and erase masked values before any learned operation.
+
+    The recurrent and ALMT ports retain three-stream architecture for ablations.
+    A dropped stream is therefore represented by an entirely false mask, rather
+    than allowing projection biases or NaN padding to introduce evidence.
+    """
+    first = features[MODALITIES[0]]
+    if first.ndim != 3 or first.shape[1] < 1:
+        raise ValueError("Expected nonempty aligned [batch, time, width] features")
+    shape = first.shape[:2]
+    safe, valid = {}, {}
+    for modality in MODALITIES:
+        values, mask = features[modality], masks[modality]
+        if (
+            values.ndim != 3
+            or values.shape[:2] != shape
+            or values.shape[2] != feature_dims[modality]
+            or mask.shape != shape
+        ):
+            raise ValueError("Expected aligned feature sequences, masks and configured widths")
+        valid[modality] = (
+            mask.bool() if modality in modalities else torch.zeros_like(mask, dtype=torch.bool)
+        )
+        safe[modality] = values.masked_fill(~valid[modality][..., None], 0)
+    return safe, valid
 
 
 def _head(width: int, config: ModelConfig):
@@ -168,6 +229,14 @@ class TransformerClassifier(nn.Module):
 def build_model(config: ModelConfig, feature_dims: dict[str, int]) -> nn.Module:
     if set(feature_dims) != set(MODALITIES) or min(feature_dims.values()) < 1:
         raise ValueError("Positive feature widths for text, audio and vision are required")
+    if config.name == "almt":
+        from .almt import ALMTClassifier
+
+        return ALMTClassifier(config, feature_dims)
+    if config.name == "graph_mfn":
+        from .graph_mfn import GraphMFNClassifier
+
+        return GraphMFNClassifier(config, feature_dims)
     return {
         "text": TextClassifier,
         "concat": ConcatClassifier,

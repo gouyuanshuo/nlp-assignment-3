@@ -1,11 +1,13 @@
 """Seed summaries, paired source-video bootstrap, and exportable figures."""
 
 import csv
+from dataclasses import asdict
 from itertools import combinations
 from pathlib import Path
 
 import numpy as np
 
+from .config import config_from_dict
 from .evaluate import read_predictions
 from .io import fingerprint, read_json, write_json
 
@@ -169,7 +171,9 @@ def summarize_runs(
         group = groups.setdefault(name, {})
         if seed in group:
             raise ValueError(f"Duplicate experiment/seed: {name}/{seed}")
-        config = read_json(run_dir / "config.json")
+        # A resumed matrix can mix completed legacy seeds with newly saved
+        # seeds. Compare effective settings, not absent default-valued fields.
+        config = asdict(config_from_dict(read_json(run_dir / "config.json")))
         config["training"].pop("seed")
         if group and fingerprint(config) != next(iter(group.values()))["config_fingerprint"]:
             raise ValueError("Model/training settings must match within each seed group")
