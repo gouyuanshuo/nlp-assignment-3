@@ -24,6 +24,7 @@ from .ALMT_evaluation import (
     evaluate_prepared,
     resolve_device,
     set_seed,
+    sentiment_classes,
     write_csv,
 )
 
@@ -254,7 +255,11 @@ def train_one_seed(
                     positive_probabilities.append(output.cpu())
                 positive_probabilities = torch.cat(positive_probabilities)
             positive_probabilities = torch.sigmoid(positive_probabilities)
-        labels_array = labels.detach().cpu().numpy()
+        if prepared_mode:
+            roc_labels = labels
+        else:
+            roc_labels = (sentiment_classes(labels, args.neutral_threshold) == 2).long()
+        labels_array = roc_labels.detach().cpu().numpy()
         probabilities_array = positive_probabilities.detach().cpu().numpy().reshape(-1)
         confusion = binary_confusion_matrix(labels_array, probabilities_array)
         confusion_rows.append(
