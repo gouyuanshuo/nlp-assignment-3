@@ -8,6 +8,19 @@ Mean test macro F1 across three seeds is **82.49% for text-only, 82.42% for conc
 
 **Task:** negative (`y < 0`) versus positive (`y > 0`). Exactly neutral clips are excluded. The model has no neutral class, and its softmax probabilities are not calibrated measures of a person's internal emotion.
 
+## ALMT and Graph-MFN integration (21 October 2026)
+
+Hanlin's ALMT and Graph-MFN implementations now use the same installed package,
+prepared data, trainer, resumable checkpoints and evaluation pipeline. See the
+[integration guide](docs/hanlin-integration.md) for model commands, component
+ablations, whole-video training fractions and verification limits. These new
+models have code-level synthetic checks, not reported real-MOSEI results; the
+previous Transformer results above are unchanged.
+
+In Colab, `INCLUDE_HANLIN_MODELS = True` explicitly adds both models. Each
+selected configuration gets its own one-epoch timing run before the matrix.
+The existing default model matrix and trained demo checkpoint are unchanged.
+
 ## Classmates start here
 
 Use the **pretrained Docker demo** on Linux, macOS (Intel or Apple Silicon), or Windows through WSL2. You do not need Python, CUDA, the training dataset, or a Colab account on your computer. Install Docker and GitHub CLI, then run:
@@ -30,7 +43,7 @@ All local code and data stay in `/home/gys/Projects/nlp-assignment-3`.
 
 1. Open [01_download_csd.ipynb](notebooks/01_download_csd.ipynb) in Colab on a **CPU runtime**. Upload `dist/mosei-colab-source.zip` when prompted and mount your Drive. It downloads about **28.4 GB** of selected CSD streams into `MyDrive/NLP_Assignment_3/csd`; interrupted transfers resume.
 2. Open [02_train_colab.ipynb](notebooks/02_train_colab.ipynb), select an available GPU (A100 preferred), and mount the same Drive. The notebook copies the source to runtime storage, regenerates frozen BERT words and saves a reusable prepared cache to Drive.
-3. Run the timing cell and enter the **units/hour shown in your Colab resource panel** and your remaining balance. It measures one epoch on the allocated GPU before estimating the matrix. Download, preparation, evaluation and idle time are separate costs; 200 units do not represent a fixed number of GPU hours. Availability and limits vary ([Colab FAQ](https://research.google.com/colaboratory/faq.html)).
+3. Run the timing cell and enter the **units/hour shown in your Colab resource panel** and your remaining balance. It measures one epoch per selected configuration on the allocated GPU before estimating the matrix. Download, preparation, evaluation and idle time are separate costs; 200 units do not represent a fixed number of GPU hours. Availability and limits vary ([Colab FAQ](https://research.google.com/colaboratory/faq.html)).
 4. Run the frozen training matrix. Each completed epoch is checkpointed to Drive. Rerunning the same cells resumes after a disconnect; a partial epoch repeats. The default is six configurations × three seeds; `INCLUDE_ABLATIONS = False` runs the three core models first, but use a new matrix directory if changing a matrix already started.
 5. Once modeling choices are fixed, evaluate held-out data and export the Transformer checkpoint selected by **validation** performance. Extract the exported `selected-run/` folder into local `runs/colab/`, then launch the demo below.
 
