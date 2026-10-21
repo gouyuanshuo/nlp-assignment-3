@@ -59,7 +59,7 @@ def calculate_weighted_f1(labels: torch.Tensor, predictions: torch.Tensor) -> fl
 	return float((f1 * support).sum() / support.sum().clamp_min(1))
 
 
-def evaluate_metrics(model: nn.Module, loader: DataLoader, device: torch.device) -> dict[str, float]:
+def evaluate_metrics(model: GraphMFN, loader: DataLoader, device: torch.device) -> dict[str, float]:
 	metrics, labels, predictions = evaluate(model, loader, device)
 	return {**metrics, "weighted_f1": calculate_weighted_f1(labels, predictions)}
 
