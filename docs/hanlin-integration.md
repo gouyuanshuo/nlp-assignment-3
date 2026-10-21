@@ -79,6 +79,12 @@ the full matrix; the estimates exclude preparation, test evaluation and idle
 time and are not spending limits. The source bundle includes the installed
 modules and both TOML configurations automatically.
 
+Checkpoint export requires the frozen matrix to be fully trained, with matching
+completion metadata and export files for every configured model/seed. An
+interrupted matrix must be resumed first; extra seed directories are ignored.
+Changing the current configuration, seeds or prepared cache also prevents
+exporting a checkpoint from a different matrix by accident.
+
 ## Configuration mapping
 
 ALMT uses `d_model` for its hidden width, `n_heads`, `almt_token_count`,

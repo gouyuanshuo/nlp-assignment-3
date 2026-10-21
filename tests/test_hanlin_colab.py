@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import sys
 import zipfile
+from dataclasses import asdict, replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -128,13 +129,200 @@ def test_colab_matrix_uses_the_exact_measured_configuration_list(tmp_path):
     assert "--include-ablations" not in command
 
 
-def test_colab_export_explains_missing_model_runs(tmp_path, monkeypatch):
-    google = SimpleNamespace(colab=SimpleNamespace(files=SimpleNamespace()))
+@pytest.fixture
+def export_matrix(tmp_path, monkeypatch):
+    downloads = []
+    google = SimpleNamespace(
+        colab=SimpleNamespace(files=SimpleNamespace(download=downloads.append))
+    )
     monkeypatch.setitem(sys.modules, "google", google)
     monkeypatch.setitem(sys.modules, "google.colab", google.colab)
-    namespace = {"EXPORT_MODEL": "almt", "RUNS": tmp_path, "json": json}
-    with pytest.raises(ValueError, match="almt.*CONFIG_PATHS"):
+    runs, store = tmp_path / "runs", tmp_path / "store"
+    runs.mkdir()
+    store.mkdir()
+    paths = [str(ROOT / f"configs/{name}.toml") for name in ("almt", "text")]
+    configs = []
+    for path in paths:
+        config = load_config(path)
+        configs.append(replace(config, training=replace(config.training, device="cuda")))
+    manifest = {
+        "status": "trained",
+        "configs": [asdict(config) for config in configs],
+        "seeds": [1111, 1112],
+        "data_fingerprint": "synthetic-fingerprint",
+    }
+    (runs / "manifest.json").write_text(json.dumps(manifest))
+    for config in configs:
+        for seed in manifest["seeds"]:
+            directory = runs / f"{config.name}-seed{seed}"
+            directory.mkdir()
+            saved_config = asdict(replace(config, training=replace(config.training, seed=seed)))
+            result = {
+                "config": saved_config,
+                "data_fingerprint": manifest["data_fingerprint"],
+                "epochs_completed": 1,
+                "best_epoch": 1,
+                "best_validation": {"macro_f1": 0.5, "loss": 0.8},
+            }
+            (directory / "run.json").write_text(json.dumps(result))
+            (directory / "config.json").write_text(json.dumps(saved_config))
+            (directory / "history.json").write_text(json.dumps([{"epoch": 1}]))
+            (directory / "data_audit.json").write_text(
+                json.dumps({"fingerprint": manifest["data_fingerprint"]})
+            )
+            (directory / "best.pt").write_bytes(b"synthetic checkpoint fixture")
+    namespace = {
+        "EXPORT_MODEL": "almt",
+        "RUNS": runs,
+        "STORE": store,
+        "CONFIG_PATHS": paths,
+        "SEEDS": manifest["seeds"].copy(),
+        "audit": {"fingerprint": manifest["data_fingerprint"]},
+        "json": json,
+        "Path": lambda value: (
+            tmp_path / "checkpoint.zip"
+            if str(value) == "/content/mosei-video-checkpoint.zip"
+            else Path(value)
+        ),
+        "zipfile": zipfile,
+        "shutil": shutil,
+        "downloads": downloads,
+    }
+    return namespace
+
+
+def rewrite_json(path, update):
+    value = json.loads(path.read_text())
+    update(value)
+    path.write_text(json.dumps(value))
+
+
+@pytest.mark.parametrize("status", [None, "training"])
+def test_colab_export_requires_completed_frozen_matrix(export_matrix, status):
+    namespace = export_matrix
+    manifest = namespace["RUNS"] / "manifest.json"
+    if status is None:
+        manifest.unlink()
+    else:
+        rewrite_json(manifest, lambda value: value.update(status=status))
+    with pytest.raises(ValueError, match="[Mm]atrix.*(manifest|training|complete)"):
         exec(notebook_cell("candidates ="), namespace)
+    assert namespace["downloads"] == []
+
+
+def test_colab_export_rejects_model_outside_frozen_matrix(export_matrix):
+    namespace = export_matrix
+    namespace["EXPORT_MODEL"] = "graph_mfn"
+    with pytest.raises(ValueError, match="graph_mfn.*frozen"):
+        exec(notebook_cell("candidates ="), namespace)
+
+
+@pytest.mark.parametrize("model", ["almt", "text"])
+@pytest.mark.parametrize(
+    "missing_file", ["best.pt", "run.json", "config.json", "history.json", "data_audit.json"]
+)
+def test_colab_export_rejects_any_incomplete_frozen_seed(export_matrix, model, missing_file):
+    namespace = export_matrix
+    (namespace["RUNS"] / f"{model}-seed1112" / missing_file).unlink()
+    with pytest.raises(ValueError, match=f"{model}-seed1112.*{missing_file}"):
+        exec(notebook_cell("candidates ="), namespace)
+    assert namespace["downloads"] == []
+
+
+@pytest.mark.parametrize("changed", ["seeds", "configs", "config_contents", "data"])
+def test_colab_export_rejects_ui_changes_since_matrix_freeze(export_matrix, changed, tmp_path):
+    namespace = export_matrix
+    if changed == "seeds":
+        namespace["SEEDS"] = [1111]
+    elif changed == "configs":
+        namespace["CONFIG_PATHS"] = namespace["CONFIG_PATHS"][:1]
+    elif changed == "config_contents":
+        config = tmp_path / "changed.toml"
+        config.write_text(
+            Path(namespace["CONFIG_PATHS"][0]).read_text().replace("epochs = 30", "epochs = 29")
+        )
+        namespace["CONFIG_PATHS"][0] = str(config)
+    else:
+        namespace["audit"]["fingerprint"] = "different-data"
+    with pytest.raises(ValueError, match="[Ff]rozen"):
+        exec(notebook_cell("candidates ="), namespace)
+    assert namespace["downloads"] == []
+
+
+@pytest.mark.parametrize(
+    "metadata", ["run_seed", "run_data", "saved_config", "data_audit", "incomplete_history"]
+)
+def test_colab_export_rejects_mismatched_completed_metadata(export_matrix, metadata):
+    namespace = export_matrix
+    directory = namespace["RUNS"] / "almt-seed1112"
+    if metadata == "run_seed":
+        rewrite_json(
+            directory / "run.json", lambda value: value["config"]["training"].update(seed=9999)
+        )
+    elif metadata == "run_data":
+        rewrite_json(directory / "run.json", lambda value: value.update(data_fingerprint="other"))
+    elif metadata == "saved_config":
+        rewrite_json(directory / "config.json", lambda value: value["training"].update(seed=9999))
+    elif metadata == "data_audit":
+        rewrite_json(directory / "data_audit.json", lambda value: value.update(fingerprint="other"))
+    else:
+        (directory / "history.json").write_text("[]")
+    with pytest.raises(ValueError, match="almt-seed1112"):
+        exec(notebook_cell("candidates ="), namespace)
+    assert namespace["downloads"] == []
+
+
+@pytest.mark.parametrize("status", ["trained", "evaluated"])
+def test_colab_export_uses_only_frozen_seeds_and_validation_scores(export_matrix, status):
+    namespace = export_matrix
+    runs = namespace["RUNS"]
+    rewrite_json(runs / "manifest.json", lambda value: value.update(status=status))
+    rewrite_json(
+        runs / "almt-seed1111/run.json",
+        lambda value: value.update(
+            best_validation={"macro_f1": 0.7, "loss": 0.8}, test_macro_f1=1.0
+        ),
+    )
+    rewrite_json(
+        runs / "almt-seed1112/run.json",
+        lambda value: value.update(
+            best_validation={"macro_f1": 0.7, "loss": 0.4}, test_macro_f1=0.0
+        ),
+    )
+    shutil.copytree(runs / "almt-seed1111", runs / "almt-seed9999")
+    rewrite_json(
+        runs / "almt-seed9999/run.json",
+        lambda value: value.update(best_validation={"macro_f1": 1.0, "loss": 0.0}),
+    )
+    exec(notebook_cell("candidates ="), namespace)
+    assert namespace["selected"] == runs / "almt-seed1112"
+    assert namespace["downloads"] == [str(namespace["export"])]
+    with zipfile.ZipFile(namespace["export"]) as archive:
+        result = json.loads(archive.read("selected-run/run.json"))
+        assert result["config"]["training"]["seed"] == 1112
+
+
+def test_colab_export_preserves_missing_default_config_compatibility(export_matrix):
+    namespace = export_matrix
+
+    def omit_default_model_fields(config):
+        for field in list(config["model"]):
+            if field.startswith(("almt_", "graph_")):
+                del config["model"][field]
+
+    manifest_path = namespace["RUNS"] / "manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    for config in manifest["configs"]:
+        omit_default_model_fields(config)
+        for seed in manifest["seeds"]:
+            directory = namespace["RUNS"] / f"{config['name']}-seed{seed}"
+            rewrite_json(directory / "config.json", omit_default_model_fields)
+            rewrite_json(
+                directory / "run.json", lambda result: omit_default_model_fields(result["config"])
+            )
+    manifest_path.write_text(json.dumps(manifest))
+    exec(notebook_cell("candidates ="), namespace)
+    assert len(namespace["downloads"]) == 1
 
 
 def test_source_bundle_installs_and_imports_both_models_outside_checkout(tmp_path, monkeypatch):

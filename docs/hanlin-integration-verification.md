@@ -58,6 +58,24 @@ was accessed. Tests use explicitly synthetic fixtures.
 
 ## Remaining acceptance boundary
 
+### Export completion follow-up
+
+Post-integration review identified an inherited notebook edge case: exporting
+after an interrupted matrix could select from only the completed seed folders.
+Export now requires `trained`/`evaluated` manifest status, the exact frozen
+configuration/seed/data identity, and matching completion metadata plus export
+files for every frozen run. It ignores extra seed folders and ranks the chosen
+experiment using validation metrics only. Legacy missing-default configs remain
+compatible. Independent review found no blocker in the guard.
+
+After this fix, the full suite reports **227 passed, 2 failed**, with only the
+same two Unix-socket environment failures described above. All **32 Colab
+tests** pass; the added export regression cases were first observed failing
+against the previous implementation. Ruff, notebook compilation, deterministic
+regeneration and diff checks pass, and notebook 01 remains unchanged.
+
+### Data and runtime limits
+
 This establishes code integration, not real-data performance or published-paper
 reproduction. No new MOSEI accuracy, F1, training time, GPU memory requirement or
 Colab cost is claimed. Official splits and full-training normalization are

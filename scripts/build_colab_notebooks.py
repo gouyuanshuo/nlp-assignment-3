@@ -276,18 +276,68 @@ def build():
         print('Clean / matched-corruption results and paired source-video bootstrap intervals:', RUNS / 'report')
         """),
         code("""
+        from dataclasses import replace
         from google.colab import files
+        from mosei.config import config_from_dict, load_config
+
+        manifest_path = RUNS / 'manifest.json'
+        if not manifest_path.is_file():
+            raise ValueError('Matrix manifest is missing. Run the complete frozen training matrix before export.')
+        manifest = json.loads(manifest_path.read_text())
+        if manifest.get('status') not in {'trained', 'evaluated'}:
+            raise ValueError('Matrix training is incomplete. Resume the frozen matrix before export.')
+        frozen_configs = [config_from_dict(value) for value in manifest['configs']]
+        frozen_seeds = manifest['seeds']
+        if not frozen_configs or not frozen_seeds or len(set(frozen_seeds)) != len(frozen_seeds):
+            raise ValueError('Matrix manifest must contain configurations and unique seeds.')
+        if sum(config.name == EXPORT_MODEL for config in frozen_configs) != 1:
+            raise ValueError(f'{EXPORT_MODEL} is not a unique experiment in the frozen matrix. '
+                             'Choose an included EXPORT_MODEL, or train a new matrix with different CONFIG_PATHS.')
+        current_configs = []
+        for config_path in CONFIG_PATHS:
+            config = load_config(Path(config_path))
+            current_configs.append(replace(config, training=replace(config.training, device='cuda')))
+        if current_configs != frozen_configs or SEEDS != frozen_seeds:
+            raise ValueError('Current CONFIG_PATHS/configuration contents or SEEDS differ from the frozen matrix. '
+                             'Restore those choices, or train a new RUNS directory.')
+        if audit['fingerprint'] != manifest['data_fingerprint']:
+            raise ValueError('Current data differs from the frozen matrix. Restore the matching prepared cache.')
+
+        # run.json is the trainer's completion marker; validate every frozen run,
+        # not just whichever seed directories happen to exist for the export model.
+        export_files = ['best.pt', 'config.json', 'run.json', 'history.json', 'data_audit.json']
         candidates = []
-        for directory in RUNS.glob(f'{EXPORT_MODEL}-seed*'):
-            result = json.loads((directory / 'run.json').read_text())
-            candidates.append((result['best_validation']['macro_f1'], -result['best_validation']['loss'], directory))
-        if not candidates:
-            raise ValueError(f'No trained runs for {EXPORT_MODEL}. Include it in CONFIG_PATHS, '
-                             'finish training, or choose an available EXPORT_MODEL.')
+        for config in frozen_configs:
+            for seed in frozen_seeds:
+                directory = RUNS / f'{config.name}-seed{seed}'
+                missing = [name for name in export_files if not (directory / name).is_file()]
+                if missing:
+                    raise ValueError(f'Incomplete frozen run {directory.name}: missing {", ".join(missing)}. '
+                                     'Resume the matrix before export.')
+                expected = replace(config, training=replace(config.training, seed=seed))
+                try:
+                    result = json.loads((directory / 'run.json').read_text())
+                    saved_config = json.loads((directory / 'config.json').read_text())
+                    history = json.loads((directory / 'history.json').read_text())
+                    saved_audit = json.loads((directory / 'data_audit.json').read_text())
+                    if (config_from_dict(result['config']) != expected
+                            or config_from_dict(saved_config) != expected
+                            or result['data_fingerprint'] != manifest['data_fingerprint']
+                            or saved_audit['fingerprint'] != manifest['data_fingerprint']):
+                        raise ValueError('configuration, seed, or data does not match the frozen matrix')
+                    if (not 1 <= result['epochs_completed'] <= expected.training.epochs
+                            or result['epochs_completed'] != len(history)
+                            or not 1 <= result['best_epoch'] <= result['epochs_completed']):
+                        raise ValueError('completed epoch metadata and history do not match')
+                    score = (result['best_validation']['macro_f1'], -result['best_validation']['loss'])
+                except (OSError, ValueError, KeyError, TypeError) as exc:
+                    raise ValueError(f'Invalid completed run {directory.name}: {exc}') from exc
+                if config.name == EXPORT_MODEL:
+                    candidates.append((*score, directory))
         selected = max(candidates, key=lambda x: x[:2])[2]  # Never select by test scores.
         export = Path('/content/mosei-video-checkpoint.zip')
         with zipfile.ZipFile(export, 'w', compression=zipfile.ZIP_DEFLATED) as archive:
-            for name in ['best.pt', 'config.json', 'run.json', 'history.json', 'data_audit.json']:
+            for name in export_files:
                 archive.write(selected / name, 'selected-run/' + name)
         shutil.copy2(export, STORE / export.name)
         print('Selected by validation:', selected.name)
